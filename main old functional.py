@@ -1,14 +1,12 @@
 import gradio as gr
 import base64
 import json
-import datetime
-import os
-import copy
 
 from PIL import Image
 from io import BytesIO
 from dotenv import dotenv_values
 from together import Together
+from dotenv import dotenv_values
 
 # Load API key from .env file
 env_vars = dotenv_values('.env')
@@ -18,15 +16,18 @@ client = Together(api_key=together_api_key)
 model="meta-llama/Llama-3-70b-chat-hf"
 image_model="black-forest-labs/FLUX.1-schnell-Free"
 default_image_file_path='./default_image.png'
-image_file_name="./image/output_image" # do not put the termination (.png)
+image_file_path="output_image.png"
 world_path = './SeuMundo_L1.json'
 is_start=True
 
-# Carrega o mundo inicial
+# Salvar e recuperar o Jogo
+def save_world(world, filename):
+    with open(filename, 'w') as f:
+        json.dump(world, f)
+
 def load_world(filename):
     with open(filename, 'r') as f:
         return json.load(f)
-
 
 # carregando o mundo
 world = load_world('./SeuMundo_L1.json')
@@ -128,9 +129,8 @@ initial_game_state = {
     "inventory": initial_inventory,
     "output_image" : default_image_file_path
 }
-game_state = copy.deepcopy(initial_game_state)
-
-
+game_state = initial_game_state
+'''
 def is_safe(message):
     global client
     # Build the prompt with embedded values
@@ -146,6 +146,8 @@ def is_safe(message):
     Provide your safety assessment for user in the above conversation:
     - First line must read 'safe' or 'unsafe'.
     - If unsafe, a second line must include a comma-separated list of violated categories. [/INST]"""
+    
+    client = client
 
     response = client.completions.create(
         model="Meta-Llama/LlamaGuard-2-8b",
@@ -153,9 +155,10 @@ def is_safe(message):
     )
     result = response.choices[0].text
     return result.strip() == 'safe'
+'''
 
 
-def get_game_state(inventory={}):  #TODO: verify world['start'] and all other things in gme state
+def get_game_state(inventory={}):  #TODO: verify world['start']
     global world, kingdom, town, character, start, image_file_path
 
     game_state = {
@@ -193,15 +196,14 @@ def detect_inventory_changes(game_state, output):
     return result['itemUpdates']
 
 
-def update_inventory(inventory, item_updates): #TODO:  quando o inventario não é alterado dá erro
+def update_inventory(inventory, item_updates):
     update_msg = ''
     
     for update in item_updates:
         name = update['name']
         change_amount = update['change_amount']
-        if change_amount == 0:
-            continue
-        elif change_amount > 0:
+        
+        if change_amount > 0:
             if name not in inventory:
                 inventory[name] = change_amount
             else:
@@ -217,7 +219,7 @@ def update_inventory(inventory, item_updates): #TODO:  quando o inventario não 
     return update_msg #it is a string
 
 
-def run_action(message, history, game_state): 
+def run_action(message, history, game_state): #TODO: review messages and history
     global system_prompt, model, client, world_info, is_start
     
     if(message == 'start'):
@@ -244,6 +246,7 @@ def run_action(message, history, game_state):
  
            
     local_messages.append({"role": "user", "content": message})
+    client = client
     model_output = client.chat.completions.create(
         model=model,
         messages=local_messages
@@ -255,12 +258,15 @@ def run_action(message, history, game_state):
     is_start = False
 
 
-    return is_start, result # returns a tuple. A bool and a string
+    return is_start, result # it is a string
+
+
+# TODO: function update state?
 
 
 def image_generator(prompt):
     # creates an image and returns a file path for the image
-    global client, image_model, image_file_name
+    global client, image_model, image_file_path
 
     client = client
 
@@ -274,8 +280,7 @@ def image_generator(prompt):
         response_format="b64_json",
     )
     image_data = base64.b64decode(response.data[0].b64_json)
-    image_file_path = f"{image_file_name}_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.png"
-
+    
     # Save the image as a file
     with open(image_file_path, "wb") as f:
         f.write(image_data)
@@ -283,110 +288,22 @@ def image_generator(prompt):
     return image_file_path
 
 
+def main_loop(message, history, image_path):
 
-
-# Funções para salvar e recuperar o Jogo
-
-# Abre dialogo para salvar o jogo
-def save_game(chatbot, game_state):
-    """
-    Open a dialog to save the current game state with a user-specified filename
-    """
-    # Ensure saves directory exists
-    os.makedirs('game_saves', exist_ok=True)
-    
-    # Serialize the game state and chatbot history
-    save_data = {
-        'chatbot_history': chatbot,
-        'game_state': game_state
-    }
-    
-    return gr.update(visible=True), gr.update(visible=True)
-
-# Abre dialogo para carregar um jogo
-def retrieve_game():
-    """
-    Open a dialog to retrieve a previously saved game state
-    """
-    # Check if saves directory exists and has files
-    if not os.path.exists('game_saves'):
-        return {"choices": [], "value": None, "visible": False}
-    
-    # Get list of save files
-    save_files = [f for f in os.listdir('game_saves') if f.endswith('.json')]
-    
-    return {"choices": save_files, "value": None, "visible": True}
-
-
-
-#Salva o jogo com o nome especificado
-def confirm_save(filename, chatbot, game_state):
-    """
-    Save the game with the specified filename
-    """
-    if not filename.strip():
-        return gr.update(visible=True)  # Show error about empty filename
-    
-    # Ensure saves directory exists
-    os.makedirs('game_saves', exist_ok=True)
-    
-    # Prepare save data
-    save_data = {
-        'chatbot_history': chatbot,
-        'game_state': game_state
-    }
-    
-    # Save file
-    save_path = os.path.join('game_saves', f"{filename}.json")
-    with open(save_path, 'w', encoding='utf-8') as f:
-        json.dump(save_data, f, ensure_ascii=False, indent=4)
-    
-    # Hide save input field
-    return gr.update(visible=False)
-
-# Carrega o jogo com o nome especificado
-def confirm_retrieve(selected_file):
-    """
-    Load the selected game save file
-    """
-    if not selected_file:
-        return [], gr.update(visible=False), gr.update(value=default_image_file_path), initial_game_state
-    
-    # Construct full path
-    save_path = os.path.join('game_saves', selected_file)
-    
-    # Load save data
-    try:
-        with open(save_path, 'r', encoding='utf-8') as f:
-            save_data = json.load(f)
-        
-        # Return loaded data
-        return (
-            save_data.get('chatbot_history', []),  # chatbot history 
-            gr.update(visible=False),  # hide modal
-            gr.update(value=default_image_file_path),  # reset image 
-            save_data.get('game_state', initial_game_state)  # game state
-        )
-    except Exception as e:
-        print(f"Error loading save file: {e}")
-        return [], gr.update(visible=False), gr.update(value=default_image_file_path), initial_game_state
-
-def main_loop(message, history): #TODO: create a limit to the size of history inside main_loop
-
-    global game_state, is_start, initial_game_state, inventory
-
-    _, output = run_action(message, history, game_state) # the underscore (_) is a placeholder for a value that is not used. the first value isignored and the 2nd is used
+    global game_state, is_start, initial_game_state
 
     if message.lower().strip() == 'start':
         is_start = True
         game_state = initial_game_state
-        print( "Bem-vindo ao jogo! Sua aventura começa agora.")
+        output = "Bem-vindo ao jogo! Sua aventura começa agora."
         generated_image_path = default_image_file_path
     else:
         is_start = False
-        print(f"\nPergunta:\n{message}\n")
+        _,output = run_action(message, history, game_state)
         generated_image_path = image_generator(output)
-        print (f"\npre action inventory:\n{game_state['inventory']}\n")
+
+    #output = run_action(message, history, game_state)  # Retorna uma tupla
+    _, output = run_action(message, history, game_state)
 
 
     #safe = is_safe(output)
@@ -404,25 +321,21 @@ def main_loop(message, history): #TODO: create a limit to the size of history in
     history.append(formatted_message)
     history.append(formatted_output)
 
-    
     print(f"\nUpdatedHistory:\n{history}\n")    
+    
+    # até aqui OK
 
-    return history, generated_image_path, "" # Clear the input field by returning an empty string
+    return history, generated_image_path
 
 
 def start_game(main_loop, image_path=default_image_file_path, share=False):
     
     with gr.Blocks (theme="soft") as demo:
-        with gr.Row():
-            with gr.Column(scale=4):
-                # Chatbot component
-                chatbot = gr.Chatbot(height=450, placeholder="Bem vindo a Arkonix, um reino onde as cidades são construídas sobre as costas de enormes criaturas chamadas Leviatãs, que vagam pelo mundo como montanhas vivas. Essas criaturas gigantes, com escamas grossas como montanhas e olhos que brilham como estrelas, são consideradas sagradas pelos habitantes de Arkonix, que aprenderam a viver em harmonia com elas. As cidades são construídas com madeira e pedra, e são conectadas por pontes e cordas, criando uma rede complexa de ruas e edifícios que se movem ao ritmo dos Leviatãs. Clique em 'Enter' para começar sua aventura.", type='messages')
-                    # Gradio state for game state
-                game_state = gr.State(initial_game_state)
-
-            with gr.Column(scale=4):        
-                # Image output
-                output_image = gr.Image(value=image_path)
+        # Chatbot component
+        chatbot = gr.Chatbot(height=250, placeholder="Digite 'start' para começar", type='messages')
+        
+        # Image output
+        output_image = gr.Image(value=image_path, label="Cena Atual")  # Use a imagem padrão
         
         # Input components
         with gr.Row():
@@ -430,61 +343,20 @@ def start_game(main_loop, image_path=default_image_file_path, share=False):
                 input_field = gr.Textbox(placeholder="O que você faz a seguir?", container=False)
             with gr.Column(scale=1):
                 btn = gr.Button("Enter")
-                save_btn = gr.Button("Save Game")
-                retrieve_btn = gr.Button("Retrieve Game")
-
-        # Save game modal
-        with gr.Column(visible=False) as save_modal:
-            save_filename = gr.Textbox(label="Enter filename to save game")
-            confirm_save_btn = gr.Button("Confirm Save")
-            save_error = gr.Textbox(label="Error", visible=False)
-        
-        # Retrieve game modal
-        saved_files = gr.Dropdown(label="Select a saved game", choices=[], visible=False, value=None, allow_custom_value=True)
-        confirm_retrieve_btn = gr.Button("Load Game", visible=False)
-               
         
         # Button click event
         btn.click(
-            fn=main_loop,
+            fn=main_loop,    #lambda message, history: main_loop(message, history, image_path),
             inputs=[input_field, chatbot],
-            outputs=[chatbot, output_image, input_field]
+            outputs=[chatbot, output_image], # input_field],
+            api_name="game_action"
         )
-
-        # Save game flow
-        save_btn.click(
-            fn=save_game,
-            inputs=[chatbot, game_state],
-            outputs=[save_modal, saved_files, confirm_retrieve_btn]
-        )
-
-        confirm_save_btn.click(
-            fn=confirm_save,
-            inputs=[save_filename, chatbot, game_state],
-            outputs=[save_modal]
-        )
-
-        # Retrieve game flow
-        retrieve_btn.click(
-            fn=retrieve_game,
-            inputs=[],
-            outputs=[saved_files]
-        )
-
-        confirm_retrieve_btn.click(
-            fn=confirm_retrieve,
-            inputs=[saved_files],
-            outputs=[chatbot, saved_files, output_image, game_state]
-        )
-
 
     # Launch with options
     demo.launch(share=share, server_name="0.0.0.0")
 
-# Existing history initialization
 history=[{'role': 'system', 'content':system_prompt}]
 
-# Start the game
 start_game(main_loop, default_image_file_path, share=False)
 
 # Typical game state:
@@ -506,3 +378,45 @@ start_game(main_loop, default_image_file_path, share=False)
     }, 
     'output_image': './default_image.png'
 }
+
+
+
+"""
+def generate_state(prompt):
+    
+    global world_prompt, client, model
+
+    client = client
+
+    if not prompt:
+        prompt = world_prompt
+
+    output = client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": prompt},
+        ],
+    )
+    
+    world_output = output.choices[0].message.content
+    image_path = create_illustration(world_output)  # Generate illustration based on world output
+    
+    return  image_path, world_output
+
+
+# Gradio Interface
+
+with gr.Blocks() as demo:
+    with gr.Row():
+        output_image = gr.Image(label="Generated Image")
+    with gr.Row():
+        output_text = gr.Textbox(label="World Description")
+    with gr.Row():
+        input_field = gr.Textbox(label="Input Text")
+
+    btn = gr.Button("Entre com próxima ação")
+    btn.click(fn=generate_state, inputs=input_field, outputs=[output_image, output_text])
+
+demo.launch()
+"""
