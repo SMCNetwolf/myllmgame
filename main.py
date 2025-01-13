@@ -485,7 +485,7 @@ def start_game(main_loop, image_path=default_image_file_path, share=False):
 history=[{'role': 'system', 'content':system_prompt}]
 
 # Start the game
-start_game(main_loop, default_image_file_path, share=False)
+start_game(main_loop, default_image_file_path, share=True)
 
 # Typical game state:
 {
