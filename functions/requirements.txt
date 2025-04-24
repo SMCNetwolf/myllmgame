@@ -1,0 +1,4 @@
+gradio
+pillow
+together
+firebase-admin

@@ -416,7 +416,7 @@ def start_game(main_loop, image_path=default_image_file_path, share=False):
         with gr.Row():
             with gr.Column(scale=4):
                 # Chatbot component
-                chatbot = gr.Chatbot(height=450, placeholder="Bem vindo a Arkonix, um reino onde as cidades são construídas sobre as costas de enormes criaturas chamadas Leviatãs, que vagam pelo mundo como montanhas vivas. Essas criaturas gigantes, com escamas grossas como montanhas e olhos que brilham como estrelas, são consideradas sagradas pelos habitantes de Arkonix, que aprenderam a viver em harmonia com elas. As cidades são construídas com madeira e pedra, e são conectadas por pontes e cordas, criando uma rede complexa de ruas e edifícios que se movem ao ritmo dos Leviatãs. Clique em 'Enter' para começar sua aventura.", type='messages')
+                chatbot = gr.Chatbot(height=450, placeholder="Bem vindo a Arkonix, um reino onde as cidades são construídas sobre as costas de enormes criaturas chamadas Leviatãs, que vagam pelo mundo como montanhas vivas. Essas criaturas gigantes, com escamas grossas como montanhas e olhos que brilham como estrelas, são consideradas sagradas pelos habitantes de Arkonix, que aprenderam a viver em harmonia com elas. As cidades são construídas com madeira e pedra, e são conectadas por pontes e cordas, criando uma rede complexa de ruas e edifícios que se movem ao ritmo dos Leviatãs. Escreva sua próxima pergunta e depois clique em 'Enter' para começar sua aventura.", type='messages')
                     # Gradio state for game state
                 game_state = gr.State(initial_game_state)
 

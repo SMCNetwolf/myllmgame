@@ -1,0 +1,5 @@
+import { P, a } from "./mermaid-parser.core.DxAe5yJl.js";
+export {
+  P as PacketModule,
+  a as createPacketServices
+};

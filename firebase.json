@@ -1,0 +1,20 @@
+{
+  "hosting": {
+    "public": "web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "function": "gradioapp"
+      }
+    ]
+  },
+  "functions": {
+    "runtime": "python311",
+    "source": "functions"
+  }
+}
