@@ -68,7 +68,8 @@ def get_initial_game_state():
     "character": initial_character['description'],
     "start": world['description'],
     "inventory": initial_inventory,
-    "output_image" : default_image_file_path
+    "output_image" : default_image_file_path,
+    "history": []
     }
     return copy.deepcopy(initial_game_state)
 
@@ -84,33 +85,113 @@ def is_safe(message):
     result = response.choices[0].text
     return result.strip() == 'safe'
 
-def detect_inventory_changes(game_state, output):
-    global system_inventory_prompt, model, client
+def summarize(template, prompt):
+    # Build the prompt with embedded values
+    final_prompt = template + prompt
+    response = client.chat.completions.create(
+        model=model, 
+        messages=final_prompt)
+
+    result = response.choices[0].message.content    
+
+def detect_inventory_changes(game_state, last_response, verbose=False):
+
+    global model, client
+
     inventory = game_state['inventory']
+
     messages = [
         {"role": "system", "content": system_inventory_prompt},
         {"role": "user", "content": f'Current Inventory: {str(inventory)}'},
-        {"role": "user", "content": f'Recent Story: {output}'},
-        #{"role": "user", "content": 'Inventory Updates'}
+        {"role": "user", "content": f'Recent Story: {last_response}'},
     ]
+
     chat_completion = client.chat.completions.create(
-        # response_format={"type": "json_object", "schema": InventoryUpdate.model_json_schema()},
         model=model,
         temperature=0.0,
         messages=messages
         )
+
     response = chat_completion.choices[0].message.content
+
     if verbose:
-        create_log(f'\nInventory changes:\n{response}\n')
+        create_log(f'\nDETECT_INVENTORY_CHANGES: Is it a valid JSON?\n{response}\n')
+
+    #Testing for valid JSON response
     try:
         result = json.loads(response)
         return result.get('itemUpdates', [])
     except json.JSONDecodeError:
-
-        if verbose: create_log("Invalid JSON response for inventory updates.")
+        if verbose: create_log("DETECT_INVENTORY_CHANGES: \nInvalid JSON response for inventory updates.")
         return []
 
-def update_inventory(inventory, item_updates): #TODO:  quando o inventario não é alterado dá erro
+def update_inventory(inventory, item_updates, verbose=False):
+    """
+    Updates the inventory dictionary in place based on item updates.
+    
+    Args:
+        inventory (dict): Dictionary mapping item names to quantities.
+        item_updates (list): List of dictionaries with 'name' and 'change_amount'.
+        verbose (bool): If True, log the process.
+    
+    Returns:
+        str: Message summarizing the changes.
+    """
+    if verbose:
+        create_log(f'\nEntering UPDATE_INVENTORY\n')
+        create_log(f'\nUPDATE_INVENTORY - Initial Inventory: {inventory}\n')
+        create_log(f'\nUPDATE_INVENTORY - Item Updates: {item_updates}\n')
+
+    if not item_updates:
+        if verbose:
+            create_log('\nUPDATE_INVENTORY - No updates provided\n')
+        return '\nInventory: No changes'
+
+    update_msg = ''
+    
+    for update in item_updates:
+        if not isinstance(update, dict) or 'name' not in update or 'change_amount' not in update:
+            if verbose:
+                create_log(f'\nUPDATE_INVENTORY - Invalid update: {update}\n')
+            update_msg += f'\nInventory: Invalid update {update}'
+            continue
+
+        name = update['name']
+        change_amount = update['change_amount']
+        
+        if change_amount == 0:
+            continue
+        elif change_amount > 0:
+            if name not in inventory:
+                inventory[name] = change_amount
+            else:
+                inventory[name] += change_amount
+            update_msg += f'\nInventory: {name} +{change_amount}'
+        elif change_amount < 0:
+            if name in inventory:
+                inventory[name] += change_amount
+                update_msg += f'\nInventory: {name} {change_amount}'
+            else:
+                update_msg += f'\nInventory: Cannot remove {name} (not in inventory)'
+        
+        if name in inventory and inventory[name] <= 0:
+            del inventory[name]
+            if verbose:
+                create_log(f'\nUPDATE_INVENTORY - Item {name} removed because quantity went zero or negative: {inventory}\n')
+
+    
+    if verbose:
+        create_log(f'\nUPDATE_INVENTORY - Final Inventory: {inventory}\n')
+    
+    return update_msg
+
+def old_update_inventory(inventory, item_updates): #TODO:  quando o inventario não é alterado dá erro
+
+    if verbose:
+        create_log(f'\nEntering UPDATE_INVENTORY\n')
+        create_log(f'\nUPDATE_INVENTORY -Initial nventory: {inventory}\n')
+        create_log(f'\nUPDATE_INVENTORY - Item Updates: {item_updates}\n')
+
     update_msg = ''
     
     for update in item_updates:
@@ -121,6 +202,7 @@ def update_inventory(inventory, item_updates): #TODO:  quando o inventario não 
         elif change_amount > 0:
             if name not in inventory:
                 inventory[name] = change_amount
+
             else:
                 inventory[name] += change_amount
             update_msg += f'\nInventory: {name} +{change_amount}'
@@ -130,40 +212,34 @@ def update_inventory(inventory, item_updates): #TODO:  quando o inventario não 
             
         if name in inventory and inventory[name] < 0:
             del inventory[name]
+    
     if verbose:
-        create_log(f'\nInventory updated: \n{inventory}\n')
+        create_log(f'\nUPDATE_INVENTORY - Final Inventory: \n{inventory}\n')
+    
     return update_msg #it is a string
 
-def run_action(message, history, game_state):
-    global model
-
-    system_prompt = prompts.system_prompt
+def update_game_state(game_state, **updates):
+    """
+    Updates specific fields in the game_state dictionary with provided values.
+    Use: update_game_state(game_state, history=history)
+    Args:
+        game_state, 
+        world, 
+        kingdom,
+        town, 
+        character,
+        inventory, 
+        output_image, 
+        history
+    Returns:
+        dict: The updated game_state dictionary (same object, for convenience).
+    """
+    game_state.update(updates)
     if verbose:
-        create_log(f"run_action. game_state: \n{game_state}")
-        create_log(f"run_action. history: \n{history} \ntype: {type(history)}")
-    world_info = get_world_info(game_state)
-    local_messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": world_info}
-    ]
+        
+    return game_state
 
-    for entry in history:
-        if isinstance(entry, dict):
-            local_messages.append(entry)
-        else:
-            if verbose: create_log("invalid history entry")
-
-
-    local_messages.append({"role": "user", "content": message})
-    response = client.chat.completions.create(
-        model=model, 
-        messages=local_messages)
-    result = response.choices[0].message.content
-    if verbose:
-        create_log(f"\nRun Action function (LLM completion):\n{result}\n")
-    return result
-
-def image_generator(prompt):
+def image_generator(prompt, verbose=False):
     # creates an image and returns a file path for the image
     global client, image_model, image_file_name
 
@@ -187,9 +263,87 @@ def image_generator(prompt):
         f.write(image_data)
     
     if verbose:
-        create_log(f"\nFunction image_generator. Image {image_file_path} generated\n")
+        create_log(f"\nIMAGE_GENERATOR: Image {image_file_path} generated\n")
 
     return image_file_path
+
+def run_action(message, game_state, verbose=verbose):
+    global model
+
+    system_prompt = prompts.system_prompt
+    
+    if verbose:
+        create_log(f"Entering RUN ACTION")
+        create_log(f"RUN ACTION -  inital game_state: \n{game_state}")
+        create_log(f"RUN ACTION -  initial history: \n{history} \ntype: {type(history)}")
+    
+    # gets the world, Kingdom, Town and Character info from the game state
+    world_info = get_world_info(game_state)
+
+    if game_state[history]:
+        summ_history =  summarize(prompts.summarize_prompt_template,game_state[history])
+    else:
+        if verbose: create_log("RUN ACTION - invalid history entry")
+        summ_history = ""
+    
+
+    message_prompt = prompts.prompt_template + message
+
+    local_messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "assistant", "content": world_info},
+        {"role": "assistant", "content": summ_history},
+        {"role": "user", "content": prompts.prompt_template + message}
+    ]
+
+    response = client.chat.completions.create(
+        model=model, 
+        messages=local_messages)
+
+    result = response.choices[0].message.content
+
+    generated_image_path = image_generator(result, verbose=verbose)
+    # temporary stop image generation just for test
+    #generated_image_path = "Test_output_image_2025-04-28_10-22-12"
+    
+    local_messages.append({"role": "assistant", "content": result})
+
+    item_updates = detect_inventory_changes(game_state, result)
+
+    update_msg = update_inventory( game_state['inventory'], item_updates )
+
+
+
+    update_game_state(game_state, output_image=generated_image_path, history=local_messages, verbose=verbose)
+
+    if verbose:
+        create_log(f"\nRUN ACTION - Question:\n{message}\n")
+        create_log(f"\nRUN ACTION - Response:\n{message}\n")
+        create_log(f"RUN ACTION -  final game_state: \n{game_state}")
+        create_log(f"RUN ACTION -  final history: \n{history} \ntype: {type(history)}")
+
+
+
+    return game_state
+
+def main_loop(message, history, game_state):
+
+    if verbose:
+        create_log(f"Entering MAIN_LOOP\n")
+
+    run_action(message, history, game_state) #returns game_state
+    
+
+    update_msg = update_inventory( game_state['inventory'], item_updates )
+    output += update_msg # it is a string
+
+    if verbose:
+        create_log (f"\nOutput with inventory update:\n{output}\n")
+
+    if verbose:
+        create_log(f"\nUpdatedHistory:\n{history}\n")
+    return output, generated_image_path
+
 
 def save_game(chatbot, game_state):
    
@@ -258,29 +412,4 @@ def confirm_retrieve(selected_file):
         if verbose: create_log(f"Error loading save file: {e}")
         return [], default_image_file_path, get_initial_game_state()
 
-def main_loop(message, history, game_state):
 
-    if verbose:
-        create_log(f"main_loop. history: \n{history}, \ntype: {type(history)}\n")
-        create_log(f"main_loop. game_state: {game_state}")
-    
-    output = run_action(message, history, game_state)
-    
-    history.append({"role": "user", "content": message})
-    generated_image_path = image_generator(output)
-    
-    game_state["output_image"] = generated_image_path
-    if verbose:
-        create_log(f"\nPergunta:\n{message}\n")
-        create_log(f"\nImage {game_state['output_image']} generated\n")
-        create_log(f"\npre action inventory:\n{game_state['inventory']}\n")
-        
-    item_updates = detect_inventory_changes(game_state, output)
-    update_msg = update_inventory( game_state['inventory'], item_updates )
-    output += update_msg # it is a string
-
-    if verbose:
-        create_log (f"\nOutput with inventory update:\n{output}\n")
-
-    if verbose:
-        create_log(f"\nUpdatedHistory:\n{history}\n")

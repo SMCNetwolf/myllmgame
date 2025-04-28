@@ -2,12 +2,15 @@
 
 system_prompt = """
     Você é o mestre do jogo de RPG. \
-    Sua função é escrever o que acontece na próxima etapa do jogo.
-
+    Sua função é escrever o que acontece na próxima etapa do jogo.\
+    \
     Instruções: \
-
     Você deve escrever de uma a três frases para responder. \
-    Sempre responda na segunda pessoa do presente.
+    Sempre responda na segunda pessoa do presente. \
+"""
+
+prompt_template = """
+    
 """
 
 system_inventory_prompt = """
@@ -18,8 +21,8 @@ system_inventory_prompt = """
     com uma change_amount positiva. \
     Se um jogador perder um item, remova-o do seu inventário com uma \
     change_amount negativa. \
-    Apenas considere itens que claramente o jogador (você) perdeu. \
-    Apenas considere itens que claramente o jogador ganhou. \
+    Apenas considere itens que claramente o jogador (usuário) perdeu. \
+    Apenas considere itens que claramente o jogador (usuário) ganhou. \
     Não faça outras atualizações de itens. \
     Se nenhum item foi alterado, retorne {"itemUpdates": []} \
     e nada mais.
@@ -31,9 +34,25 @@ system_inventory_prompt = """
     {
         "itemUpdates": [
         {"name": <NOME DO ITEM>,
-        "change_amount": <QUANTIDADE DE MUDANÇA>}...
+        "change_amount": <QUANTIDADE DE MUDANÇA>}
         ]
     }
+"""
+
+summarize_prompt_template = """
+    Você é um agente IA de sumarização de em um jogo de RPG. Sua função é sumarizar a \
+    história do jogo para instruir o mestre do jogo a responder ao usuário. Você deve \
+    remover todos as chaves de dicionário e incluir no texto a sumarizar apenas os \
+    conteúdos dos prompts de usuário e do assistente.
+    Procure incluir no seu resumo a trajetória do personagem, objetivos alcançados, sua \
+    personalidade e o que achar relevante.
+    O mestre do jogo já tem informações sobre os locais existentes no mundo, e \
+    sobre o inventário disponível para o usuário. Exclua essas informações. \
+    Mantenha o histórico de localização, de interações com NPCs, etc.\
+    Seu resumo deve ter 200 palavras no máximo.
+
+    HISTÓRIA DO JOGO:
+
 """
 
 everyone_content_policy = {
