@@ -50,15 +50,14 @@ initial_inventory={
     "gold": 5
 }
 
-def get_world_info(game_state):
+def old_get_world_info(game_state):
     return f"""
         World: {game_state['world']}
         Kingdom: {game_state['kingdom']}
         Town: {game_state['town']}
         Your Character:  {game_state['character']}
+        Your Inventory: {game_state['inventory']}
     """
-
-system_inventory_prompt = prompts.system_inventory_prompt
 
 def get_initial_game_state():
     initial_game_state = {
@@ -101,7 +100,7 @@ def detect_inventory_changes(game_state, last_response, verbose=False):
     inventory = game_state['inventory']
 
     messages = [
-        {"role": "system", "content": system_inventory_prompt},
+        {"role": "system", "content": prompts.system_inventory_prompt},
         {"role": "user", "content": f'Current Inventory: {str(inventory)}'},
         {"role": "user", "content": f'Recent Story: {last_response}'},
     ]
@@ -125,18 +124,32 @@ def detect_inventory_changes(game_state, last_response, verbose=False):
         if verbose: create_log("DETECT_INVENTORY_CHANGES: \nInvalid JSON response for inventory updates.")
         return []
 
-def update_inventory(inventory, item_updates, verbose=False):
+def update_inventory(game_state, item_updates, verbose=False):
     """
-    Updates the inventory dictionary in place based on item updates.
-    
+    Updates the inventory dictionary within game_state with item updates, using update_game_state.
     Args:
-        inventory (dict): Dictionary mapping item names to quantities.
-        item_updates (list): List of dictionaries with 'name' and 'change_amount'.
-        verbose (bool): If True, log the process.
-    
+        game_state (dict): Dictionary containing game state, with 'inventory' key mapping item names to quantities.
+        item_updates: List of dictionaries or a single dictionary with 'name' (str) and 'change_amount' (int).
+        verbose (bool): If True, log the process. Defaults to False.
     Returns:
-        str: Message summarizing the changes.
+        None: Modifies game_state['inventory'] in place via update_game_state.    
     """
+    
+    if "inventory" not in game_state:
+        if verbose:
+            create_log('\nUPDATE_INVENTORY - Error: game_state missing inventory key\n')
+        return None
+
+    inventory = game_state["inventory"]  # Dictionary mapping items to quantities
+
+    # Ensure item_updates is a list
+    if isinstance(item_updates, dict):
+        item_updates = [item_updates]  # Convert single dict to list
+    elif not isinstance(item_updates, list):
+        if verbose:
+            create_log(f'\nUPDATE_INVENTORY - Error: item_updates must be a list or dict, got {type(item_updates)}\n')
+        return None
+
     if verbose:
         create_log(f'\nEntering UPDATE_INVENTORY\n')
         create_log(f'\nUPDATE_INVENTORY - Initial Inventory: {inventory}\n')
@@ -145,20 +158,22 @@ def update_inventory(inventory, item_updates, verbose=False):
     if not item_updates:
         if verbose:
             create_log('\nUPDATE_INVENTORY - No updates provided\n')
-        return '\nInventory: No changes'
-
-    update_msg = ''
+        return None
     
     for update in item_updates:
         if not isinstance(update, dict) or 'name' not in update or 'change_amount' not in update:
             if verbose:
                 create_log(f'\nUPDATE_INVENTORY - Invalid update: {update}\n')
-            update_msg += f'\nInventory: Invalid update {update}'
             continue
 
         name = update['name']
         change_amount = update['change_amount']
         
+        if not isinstance(change_amount, int):
+            if verbose:
+                create_log(f'\nUPDATE_INVENTORY - Invalid change_amount in update: {update}\n')
+            continue
+
         if change_amount == 0:
             continue
         elif change_amount > 0:
@@ -166,24 +181,29 @@ def update_inventory(inventory, item_updates, verbose=False):
                 inventory[name] = change_amount
             else:
                 inventory[name] += change_amount
-            update_msg += f'\nInventory: {name} +{change_amount}'
+            if verbose:
+                create_log(f'\nUPDATE_INVENTORY - Added {change_amount} {name} to inventory\n')
         elif change_amount < 0:
             if name in inventory:
                 inventory[name] += change_amount
-                update_msg += f'\nInventory: {name} {change_amount}'
+                if verbose:
+                    create_log(f'\nUPDATE_INVENTORY - Removed {abs(change_amount)} {name} from inventory\n')
             else:
-                update_msg += f'\nInventory: Cannot remove {name} (not in inventory)'
+                if verbose:
+                    create_log(f'\nUPDATE_INVENTORY - Cannot remove {name} (not in inventory)\n')
         
         if name in inventory and inventory[name] <= 0:
             del inventory[name]
             if verbose:
                 create_log(f'\nUPDATE_INVENTORY - Item {name} removed because quantity went zero or negative: {inventory}\n')
 
-    
     if verbose:
         create_log(f'\nUPDATE_INVENTORY - Final Inventory: {inventory}\n')
+
+    # Update game_state['inventory'] using update_game_state
+    update_game_state(game_state, inventory=inventory, verbose=verbose)
     
-    return update_msg
+    return None
 
 def old_update_inventory(inventory, item_updates): #TODO:  quando o inventario não é alterado dá erro
 
@@ -218,12 +238,17 @@ def old_update_inventory(inventory, item_updates): #TODO:  quando o inventario n
     
     return update_msg #it is a string
 
-def update_game_state(game_state, **updates):
+def update_game_state(game_state, verbose=False, **updates):
     """
-    Updates specific fields in the game_state dictionary with provided values.
-    Use: update_game_state(game_state, history=history)
+    Updates specific fields in the game_state dictionary in place.
+    
+    Example:
+        update_game_state(game_state, history=["Explored cave"], output_image="new_scene.png")
+    
     Args:
-        game_state, 
+        game_state (dict): The game state dictionary to update.
+        verbose (bool): If True, log the update process. Defaults to False.
+        **updates: Keyword arguments for fields to update (e.g., history, output_image).
         world, 
         kingdom,
         town, 
@@ -231,13 +256,21 @@ def update_game_state(game_state, **updates):
         inventory, 
         output_image, 
         history
+    
     Returns:
         dict: The updated game_state dictionary (same object, for convenience).
     """
-    game_state.update(updates)
     if verbose:
-        
-    return game_state
+        create_log(f'\nEntering UPDATE_GAME_STATE\n')
+        create_log(f'\nUPDATE_GAME_STATE - Initial game_state: {game_state}\n')
+        create_log(f'\nUPDATE_GAME_STATE - Updates: {updates}\n')
+
+    game_state.update(updates)
+
+    if verbose:
+        create_log(f'\nUPDATE_GAME_STATE - Final game_state: {game_state}\n')
+
+    return game_state    
 
 def image_generator(prompt, verbose=False):
     # creates an image and returns a file path for the image
@@ -286,7 +319,6 @@ def run_action(message, game_state, verbose=verbose):
         if verbose: create_log("RUN ACTION - invalid history entry")
         summ_history = ""
     
-
     message_prompt = prompts.prompt_template + message
 
     local_messages = [
@@ -308,9 +340,9 @@ def run_action(message, game_state, verbose=verbose):
     
     local_messages.append({"role": "assistant", "content": result})
 
-    item_updates = detect_inventory_changes(game_state, result)
+    item_updates = detect_inventory_changes(game_state, result, verbose=verbose)
 
-    update_msg = update_inventory( game_state['inventory'], item_updates )
+    update_msg = update_inventory( game_state, item_updates, verbose=verbose )
 
 
 
@@ -322,19 +354,12 @@ def run_action(message, game_state, verbose=verbose):
         create_log(f"RUN ACTION -  final game_state: \n{game_state}")
         create_log(f"RUN ACTION -  final history: \n{history} \ntype: {type(history)}")
 
-
-
     return game_state
 
-def main_loop(message, history, game_state):
+def inactive_main_loop(message, history, game_state):
 
-    if verbose:
-        create_log(f"Entering MAIN_LOOP\n")
-
-    run_action(message, history, game_state) #returns game_state
     
 
-    update_msg = update_inventory( game_state['inventory'], item_updates )
     output += update_msg # it is a string
 
     if verbose:
