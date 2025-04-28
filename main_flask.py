@@ -50,7 +50,7 @@ initial_inventory={
     "gold": 5
 }
 
-def old_get_world_info(game_state):
+def get_world_info(game_state):
     return f"""
         World: {game_state['world']}
         Kingdom: {game_state['kingdom']}
@@ -205,7 +205,7 @@ def update_inventory(game_state, item_updates, verbose=False):
     
     return None
 
-def old_update_inventory(inventory, item_updates): #TODO:  quando o inventario não é alterado dá erro
+def inactive_update_inventory(inventory, item_updates): #TODO:  quando o inventario não é alterado dá erro
 
     if verbose:
         create_log(f'\nEntering UPDATE_INVENTORY\n')
@@ -301,7 +301,7 @@ def image_generator(prompt, verbose=False):
     return image_file_path
 
 def run_action(message, game_state, verbose=verbose):
-    global model
+    global model, client
 
     system_prompt = prompts.system_prompt
     
@@ -342,9 +342,7 @@ def run_action(message, game_state, verbose=verbose):
 
     item_updates = detect_inventory_changes(game_state, result, verbose=verbose)
 
-    update_msg = update_inventory( game_state, item_updates, verbose=verbose )
-
-
+    update_inventory( game_state, item_updates, verbose=verbose )
 
     update_game_state(game_state, output_image=generated_image_path, history=local_messages, verbose=verbose)
 
@@ -357,18 +355,7 @@ def run_action(message, game_state, verbose=verbose):
     return game_state
 
 def inactive_main_loop(message, history, game_state):
-
-    
-
-    output += update_msg # it is a string
-
-    if verbose:
-        create_log (f"\nOutput with inventory update:\n{output}\n")
-
-    if verbose:
-        create_log(f"\nUpdatedHistory:\n{history}\n")
     return output, generated_image_path
-
 
 def save_game(chatbot, game_state):
    
