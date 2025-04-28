@@ -2,7 +2,7 @@ from create_log import verbose, create_log
 import os
 import logging
 import sqlite3
-from flask import Flask, render_template, request, session, redirect, url_for, flash
+from flask import Flask, render_template, request, session, redirect, url_for, flash, make_response
 from dotenv import load_dotenv
 from datetime import datetime
 from main_flask import run_action, get_initial_game_state, save_game, confirm_save, retrieve_game, confirm_retrieve, world
@@ -76,12 +76,20 @@ def init_db_command():
         create_log("Initialized the database.")
 
 def format_chat_history(history):
-    """Format chat history into a string."""
+    """Format chat history to include only user questions and assistant answers.
+
+    Args:
+        history (list): List of message dictionaries with 'role' and 'content'.
+
+    Returns:
+        str: Formatted string containing only user and assistant messages.
+    """
     formatted_history = ""
     for entry in history:
         role = entry["role"]
-        content = entry["content"]
-        formatted_history += f"{role.capitalize()}: {content}\n"
+        content = entry["content"].strip()
+        if role in ("user", "assistant") and content and content != world['description']:
+            formatted_history += f"{role.capitalize()}: {content}\n"
     return formatted_history
 
 @app.route("/")
@@ -108,9 +116,12 @@ def game():
     if verbose:
         create_log(f'game_state in game route: \n{session["game_state"]}')
         create_log(f"session['history'] after modification: \n{session['history']}")
-    return render_template("game.html",
-                          output=world['description'],
-                          output_image=session['game_state']["output_image"])
+    response = make_response(render_template("game.html",
+                                            output=world['description'],
+                                            output_image=session['game_state']["output_image"],
+                                            chat_history=format_chat_history(session['history'])))
+    response.headers['Cache-Control'] = 'no-store'
+    return response
 
 @app.route("/command", methods=["POST"])
 def process_command():
@@ -123,14 +134,21 @@ def process_command():
         session['game_state'] = get_initial_game_state()
     if verbose:
         create_log(f"process_command: history is: {session['history']} and type: {type(session['history'])} and game_state is: {session['game_state']}")
-    session['game_state'] = run_action(command, session['game_state'], verbose=verbose)
+    output = run_action(command, session['game_state'], verbose=verbose)
+    if verbose:
+        create_log(f"run_action output: {output}")
+    # Ensure output is a string
+    if not isinstance(output, str):
+        create_log(f"Error: run_action returned non-string: {type(output)}")
+        output = "Error: Invalid response from run_action"
     session['history'] = session['game_state']['history']  # Sync history
-    output = session['history'][-1]['content']
     generated_image_path = session['game_state']['output_image']
-    return render_template("game.html",
-                          output=output,
-                          output_image=generated_image_path,
-                          chat_history=format_chat_history(session['history']))
+    response = make_response(render_template("game.html",
+                                            output=output,
+                                            output_image=generated_image_path,
+                                            chat_history=format_chat_history(session['history'])))
+    response.headers['Cache-Control'] = 'no-store'
+    return response
 
 @app.route("/save_game", methods=["POST"])
 def save():
@@ -141,4 +159,27 @@ def save():
         flash("Game saved successfully!", "success")
     except Exception as e:
         flash(f"Failed to save game: {str(e)}", "error")
-    return redirect
+    return redirect(url_for("game"))
+
+@app.route("/retrieve_game", methods=["GET", "POST"])
+def load():
+    """Load a saved game or display available saves."""
+    if verbose:
+        create_log("Entering load game route")
+    if request.method == "POST":
+        selected_file = request.form.get("selected_file")
+        session['history'], output_image, session['game_state'] = confirm_retrieve(selected_file)
+        if verbose:
+            create_log("game loaded")
+        response = make_response(render_template("game.html",
+                                                output="Game loaded!",
+                                                output_image=output_image,
+                                                chat_history=format_chat_history(session['history'])))
+        response.headers['Cache-Control'] = 'no-store'
+        return response
+    if verbose:
+        create_log("loading game")
+    save_files = retrieve_game()
+    response = make_response(render_template("load_game.html", save_files=save_files))
+    response.headers['Cache-Control'] = 'no-store'
+    return response

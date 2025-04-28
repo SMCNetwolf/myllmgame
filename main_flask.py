@@ -20,7 +20,7 @@ client = Together(api_key=together_api_key)
 MODEL = "meta-llama/Llama-3-70b-chat-hf"
 IMAGE_MODEL = "black-forest-labs/FLUX.1-schnell-Free"
 DEFAULT_IMAGE_FILE_PATH = os.path.join('static', 'default_image.png')
-IMAGE_FILE_PREFIX = os.path.join('image', 'output_image')  # No .png extension
+IMAGE_FILE_PREFIX = os.path.join('static/image', 'output_image')  # No .png extension
 WORLD_PATH = os.path.join('.', 'SeuMundo_L1.json')
 
 def validate_world(world):
@@ -157,7 +157,7 @@ def is_safe(message):
         create_log(f"Error in is_safe: {str(e)}")
         return False  # Default to unsafe on error
 
-def summarize(template, prompt):
+def summarize(template, prompt, verbose=False):
     """Summarizes text using the specified model.
 
     Args:
@@ -176,6 +176,8 @@ def summarize(template, prompt):
             model=MODEL,
             messages=[{"role": "user", "content": final_prompt}]
         )
+        if verbose:
+            create_log(f"\nSUMMARIZE - Summarized text: \n{response.choices[0].message.content}\n\n")
         return response.choices[0].message.content
     except Exception as e:
         create_log(f"Error in summarize: {str(e)}")
@@ -378,11 +380,11 @@ def run_action(message, game_state, verbose=False):
             create_log(f"\nRUN_ACTION - Question: {message}\n")
             create_log(f"\nRUN_ACTION - Response: {result}\n")
             create_log(f"\nRUN_ACTION - Final game_state: \n{game_state}\n")
-        return game_state
+        return result
     except Exception as e:
         if verbose:
             create_log(f"Error in run_action: {str(e)}")
-        return game_state
+        return "Error in run_action - Something went wrong."
 
 def save_game(chatbot, game_state):
     """Saves the game state and chatbot history to a JSON file.
