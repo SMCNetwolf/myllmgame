@@ -9,6 +9,7 @@ from together import Together
 import prompts
 from create_log import verbose, create_log
 
+
 # Load API key from .env file
 env_vars = dotenv_values('.env')
 together_api_key = env_vars.get('TOGETHER_API_KEY')
@@ -21,8 +22,8 @@ MODEL = "meta-llama/Llama-3-70b-chat-hf"
 IMAGE_MODEL = "black-forest-labs/FLUX.1-schnell-Free"
 DEFAULT_IMAGE_FILE_PATH = os.path.join('static', 'default_image.png')
 IMAGE_FILE_PREFIX = os.path.join('static/image', 'output_image')  # No .png extension
-SAVE_GAMES_PATH = 'game_saves'
 WORLD_PATH = os.path.join('.', 'SeuMundo_L1.json')
+SAVE_GAMES_PATH = 'game_saves'
 
 def validate_world(world):
     """Validates the structure of the world JSON file.
@@ -76,24 +77,7 @@ def load_world(filename):
         create_log(f"Error: Invalid JSON in {filename}")
         raise
 
-# Load world data
-world = load_world(WORLD_PATH)
-initial_kingdom = world['kingdoms']['Eldrida']
-initial_town = initial_kingdom['towns']['Luminaria']
-initial_character = initial_town['npcs']['Eira Shadowglow']
-start_image_prompt = world['description']
-initial_inventory = {
-    "calça de pano": 1,
-    "armadura de couro": 1,
-    "camisa de pano": 1,
-    "lente de prata": 1,
-    "livro de magia": 1,
-    "livro de aventura": 1,
-    "livro guia do local": 1,
-    "gold": 5
-}
-
-def get_world_info(game_state):
+def get_world_info(game_state): #TODO: Verify if History and achievements are necessary here
     """Generates a formatted string with game state information.
 
     Args:
@@ -102,6 +86,8 @@ def get_world_info(game_state):
     Returns:
         str: Formatted string with world, kingdom, town, character, and inventory info.
     """
+    
+
     return f"""
         World: \n{game_state['world']}\n
         Kingdom: \n{game_state['kingdom']}\n
@@ -116,6 +102,32 @@ def get_initial_game_state():
     Returns:
         dict: A deep copy of the initial game state.
     """
+
+    initial_history_text =  f"No mundo de Arkonix, as cidades são construídas sobre as costas \
+        de enormes criaturas chamadas Leviatãs, que vagam pelo mundo como montanhas vivas. \
+        Eldrida é um reino de florestas eternas, liderado pela rainha Lyra, protege a natureza \
+        e seus habitantes. Sua capital, Luminária, construída sobre o Leviatã Estrela da Manhã, \
+        é conhecida por suas ruas iluminadas por lanternas mágicas que refletem a luz dos olhos do Leviatã."
+    
+    # Load world data
+    world = load_world(WORLD_PATH)
+
+    initial_kingdom = world['kingdoms']['Eldrida']
+    initial_town = initial_kingdom['towns']['Luminaria']
+    initial_character = initial_town['npcs']['Eira Shadowglow']
+    start_image_prompt = world['description']
+  
+    initial_inventory = {
+        "calça de pano": 1,
+        "armadura de couro": 1,
+        "camisa de pano": 1,
+        "lente de prata": 1,
+        "livro de magia": 1,
+        "livro de aventura": 1,
+        "livro guia do local": 1,
+        "gold": 5
+    }
+
     initial_game_state = {
         "world": world['description'],
         "kingdom": initial_kingdom['description'],
@@ -124,9 +136,26 @@ def get_initial_game_state():
         "inventory": initial_inventory,
         "achievements": "",
         "output_image": DEFAULT_IMAGE_FILE_PATH,
-        "history": []
+        "history": [{"role": "assistant", "content":initial_history_text}]
     }
-    return game_state #deepcopy(initial_game_state)
+    return initial_game_state #deepcopy(initial_game_state)
+
+def format_chat_history(history):
+    """Format chat history to include only user questions and assistant answers.
+
+    Args:
+        history (list): List of message dictionaries with 'role' and 'content'.
+
+    Returns:
+        str: Formatted string containing only user and assistant messages.
+    """
+    formatted_history = ""
+    for entry in history:
+        role = entry["role"]
+        content = entry["content"].strip()
+        if role in ("user", "assistant") and content and content != world['description']:
+            formatted_history += f"{role.capitalize()}: {content}\n"
+    return formatted_history
 
 def is_safe(message):
     """Checks if a message is safe using LlamaGuard.
@@ -389,6 +418,8 @@ def run_action(message, game_state, verbose=False):
         if verbose:
             create_log(f"Error in run_action: {str(e)}")
         return "Error in run_action - Something went wrong."
+
+
 
 def save_game(game_state, verbose=False):
     """Saves the game state and chatbot history to a JSON file.

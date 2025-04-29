@@ -5,8 +5,13 @@ import sqlite3
 from flask import Flask, render_template, request, session, redirect, url_for, flash, make_response
 from dotenv import load_dotenv
 from datetime import datetime
-from main_flask import run_action, get_initial_game_state, save_game, confirm_save, retrieve_game, confirm_retrieve, world
+from main_flask import run_action, get_initial_game_state
 import prompts
+import db_handling
+import i_o_handling
+
+# Initialize the database
+#db_handling.init_db()
 
 # Load environment variables
 load_dotenv()
@@ -15,82 +20,19 @@ app.secret_key = os.environ.get("SESSION_SECRET")
 if not app.secret_key:
     raise ValueError("SESSION_SECRET not found in .env file")
 
-# Configure logging
+# Configure logging #TODO: Verify if this is necessary
 logging.basicConfig(level=logging.DEBUG)
 
-# Database setup
-DATABASE = "rpggame.db"
-
-def query_db(query, args=(), one=False):
-    """Execute a database query and return results."""
-    db = get_db()
-    cur = db.execute(query, args)
-    db.commit()
-    rv = cur.fetchall()
-    cur.close()
-    close_db(db)
-    return (rv[0] if rv else None) if one else rv
-
-def insert_db(query, args=()):
-    """Insert data into the database and return the last row ID."""
-    db = get_db()
-    cur = db.execute(query, args)
-    db.commit()
-    id = cur.lastrowid
-    cur.close()
-    close_db(db)
-    return id
-
-def update_db(query, args=()):
-    """Update data in the database."""
-    db = get_db()
-    cur = db.execute(query, args)
-    db.commit()
-    cur.close()
-    close_db(db)
-
-def get_db():
-    """Open a database connection."""
-    db = sqlite3.connect(DATABASE)
-    db.row_factory = sqlite3.Row
-    return db
-
-def close_db(db):
-    """Close a database connection."""
-    if db is not None:
-        db.close()
-
-def init_db():
-    """Initialize the database with schema.sql."""
-    db = get_db()
-    with app.open_resource("schema.sql", mode="r") as f:
-        db.cursor().executescript(f.read())
-    db.commit()
-    close_db(db)
-
+'''
 @app.cli.command("init-db")
 def init_db_command():
     """Clear existing data and create new tables."""
     init_db()
     if verbose:
         create_log("APP ROUTE /INIT_DB: Initialized the database.")
+'''
 
-def format_chat_history(history):
-    """Format chat history to include only user questions and assistant answers.
-
-    Args:
-        history (list): List of message dictionaries with 'role' and 'content'.
-
-    Returns:
-        str: Formatted string containing only user and assistant messages.
-    """
-    formatted_history = ""
-    for entry in history:
-        role = entry["role"]
-        content = entry["content"].strip()
-        if role in ("user", "assistant") and content and content != world['description']:
-            formatted_history += f"{role.capitalize()}: {content}\n"
-    return formatted_history
+game_state = get_initial_game_state()
 
 @app.route("/")
 def index():
@@ -107,7 +49,7 @@ def index():
 @app.route("/game", methods=["GET"])
 def game():
     """Initialize game state and render the game page."""
-    session['history'] = [{"role": "system", "content": prompts.system_prompt}]
+    session['history'] = game_state['history']
     session.pop('output', None)  # Clear any old output
     if verbose:
         create_log('APP ROUTE /GAME: entering game route')
