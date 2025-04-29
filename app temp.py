@@ -2,7 +2,7 @@ from create_log import verbose, create_log
 import os
 import logging
 import sqlite3
-from flask import Flask, render_template, request, session, redirect, url_for, flash, make_response
+from flask import Flask, render_template, request, session, redirect, url_for, flash, make_response, jsonify
 from dotenv import load_dotenv
 from datetime import datetime
 from main_flask import run_action, get_initial_game_state, save_game, confirm_save, retrieve_game, confirm_retrieve, world
@@ -153,13 +153,26 @@ def process_command():
         output = "Error: Invalid response from run_action"
     session['history'] = session['game_state']['history']  # Sync history
     generated_image_path = session['game_state']['output_image']
+    rendered_chat_history = format_chat_history(session['history'])
     if verbose:
         create_log(f"process_command: history after run_action: {session['history']}")
+        create_log(f"process_command: rendered chat_history: {rendered_chat_history}")
         create_log(f"Rendering game.html with output: {output}")
+    
+    # Check if request is AJAX (from game.js)
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.accept_mimetypes.accept_json:
+        return jsonify({
+            'description': output,
+            'image_url': url_for('static', filename=generated_image_path),
+            'chat_history': rendered_chat_history,
+            'current_location': session['game_state'].get('town', 'Luminaria')  # Fallback to town name
+        })
+    
+    # Render HTML for direct form submissions
     response = make_response(render_template("game.html",
                                             output=output,
                                             output_image=generated_image_path,
-                                            chat_history=format_chat_history(session['history'])))
+                                            chat_history=rendered_chat_history))
     response.headers['Cache-Control'] = 'no-store'
     return response
 

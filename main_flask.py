@@ -21,6 +21,7 @@ MODEL = "meta-llama/Llama-3-70b-chat-hf"
 IMAGE_MODEL = "black-forest-labs/FLUX.1-schnell-Free"
 DEFAULT_IMAGE_FILE_PATH = os.path.join('static', 'default_image.png')
 IMAGE_FILE_PREFIX = os.path.join('static/image', 'output_image')  # No .png extension
+SAVE_GAMES_PATH = 'game_saves'
 WORLD_PATH = os.path.join('.', 'SeuMundo_L1.json')
 
 def validate_world(world):
@@ -80,9 +81,7 @@ world = load_world(WORLD_PATH)
 initial_kingdom = world['kingdoms']['Eldrida']
 initial_town = initial_kingdom['towns']['Luminaria']
 initial_character = initial_town['npcs']['Eira Shadowglow']
-start = world['description']
 start_image_prompt = world['description']
-
 initial_inventory = {
     "calça de pano": 1,
     "armadura de couro": 1,
@@ -104,11 +103,11 @@ def get_world_info(game_state):
         str: Formatted string with world, kingdom, town, character, and inventory info.
     """
     return f"""
-        World: {game_state['world']}
-        Kingdom: {game_state['kingdom']}
-        Town: {game_state['town']}
-        Your Character: {game_state['character']}
-        Your Inventory: {game_state['inventory']}
+        World: \n{game_state['world']}\n
+        Kingdom: \n{game_state['kingdom']}\n
+        Town: \n{game_state['town']}\n
+        Your Character: \n{game_state['character']}\n
+        Your Inventory: \n{game_state['inventory']}\n
     """
 
 def get_initial_game_state():
@@ -122,12 +121,12 @@ def get_initial_game_state():
         "kingdom": initial_kingdom['description'],
         "town": initial_town['description'],
         "character": initial_character['description'],
-        "start": world['description'],
         "inventory": initial_inventory,
+        "achievements": "",
         "output_image": DEFAULT_IMAGE_FILE_PATH,
         "history": []
     }
-    return deepcopy(initial_game_state)
+    return game_state #deepcopy(initial_game_state)
 
 def is_safe(message):
     """Checks if a message is safe using LlamaGuard.
@@ -349,11 +348,15 @@ def run_action(message, game_state, verbose=False):
             create_log(f"\nRUN_ACTION - Initial history: \n{game_state['history']}\n")
         world_info = get_world_info(game_state)
         summ_history = ""
-        if game_state['history']:
-            summ_history = summarize(prompts.summarize_prompt_template, str(game_state['history']))
-        else:
+        str_history =  " ".join([str(message['content']) for message in game_state['history']]) 
+        if len(str_history)>600:
+            summ_history = summarize(prompts.summarize_prompt_template, str_history)
             if verbose:
-                create_log("RUN_ACTION - No history to summarize")
+                create_log(f"\nRUN_ACTION - Summarized history: \n{summ_history}\n")
+        else:
+            summ_history = str_history
+            if verbose:
+                create_log("RUN_ACTION - History not summarized")
         message_prompt = prompts.prompt_template + message
         local_messages = [
             {"role": "system", "content": prompts.system_prompt},
@@ -370,10 +373,11 @@ def run_action(message, game_state, verbose=False):
         local_messages.append({"role": "assistant", "content": result})
         item_updates = detect_inventory_changes(game_state, result, verbose=verbose)
         update_inventory(game_state, item_updates, verbose=verbose)
+        updated_history = [{"role": "user", "content": message},{"role": "assistant", "content": result}]
         update_game_state(
             game_state,
             output_image=generated_image_path,
-            history=local_messages,
+            history=updated_history,
             verbose=verbose
         )
         if verbose:
@@ -386,11 +390,11 @@ def run_action(message, game_state, verbose=False):
             create_log(f"Error in run_action: {str(e)}")
         return "Error in run_action - Something went wrong."
 
-def save_game(chatbot, game_state):
+def save_game(game_state, verbose=False):
     """Saves the game state and chatbot history to a JSON file.
 
     Args:
-        chatbot (list): The chatbot conversation history.
+        history (list): The chatbot conversation history.
         game_state (dict): The current game state.
 
     Returns:
@@ -401,17 +405,47 @@ def save_game(chatbot, game_state):
         timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
         save_path = os.path.join('game_saves', f"{timestamp}.json")
         save_data = {
-            'chatbot_history': chatbot,
             'game_state': game_state
         }
         with open(save_path, 'w', encoding='utf-8') as f:
             json.dump(save_data, f, ensure_ascii=False, indent=4)
         if verbose:
-            create_log(f"Game saved to {save_path}")
+            create_log(f"SAVE_GAME: Game saved to {save_path}")
     except Exception as e:
-        create_log(f"Error in save_game: {str(e)}")
+        create_log(f"SAVE_GAME: Error in save_game: {str(e)}")
 
-def retrieve_game():
+def confirm_save(filename, game_state, verbose=False):
+    """Saves the game with a user-specified filename.
+
+    Args:
+        filename (str): The desired filename (without .json).
+        game_state (dict): The current game state.
+
+    Returns:
+        None
+    """
+    if not filename.strip():
+        create_log("CONFIRM_SAVE: Error: Empty filename")
+        return
+    try:
+        # Sanitize filename
+        filename = re.sub(r'[^\w\-]', '', filename.strip())
+        if not filename:
+            create_log("CONFIRM_SAVE: Error: Invalid filename after sanitization")
+            return
+        os.makedirs('game_saves', exist_ok=True)
+        save_path = os.path.join('game_saves', f"{filename}.json")
+        save_data = {
+            'game_state': game_state
+        }
+        with open(save_path, 'w', encoding='utf-8') as f:
+            json.dump(save_data, f, ensure_ascii=False, indent=4)
+        if verbose:
+            create_log(f"CONFIRM_SAVE: Game saved to {save_path}")
+    except Exception as e:
+        create_log(f"CONFIRM_SAVE: Error in confirm_save: {str(e)}")
+
+def retrieve_game_list(verbose=False):
     """Lists available game save files.
 
     Returns:
@@ -422,64 +456,32 @@ def retrieve_game():
             return {"choices": [], "value": None, "visible": False}
         save_files = [f for f in os.listdir('game_saves') if f.endswith('.json')]
         return {"choices": save_files, "value": None, "visible": bool(save_files)}
+        if verbose:
+            create_log(f"RETRIEVE_GAME_LIST: Found {len(save_files)} \nsave files: {save_files}")
     except Exception as e:
-        create_log(f"Error in retrieve_game: {str(e)}")
+        create_log(f"RETRIEVE_GAME_LIST: Error in trying to list saved games: {str(e)}")
         return {"choices": [], "value": None, "visible": False}
 
-def confirm_save(filename, chatbot, game_state):
-    """Saves the game with a user-specified filename.
-
-    Args:
-        filename (str): The desired filename (without .json).
-        chatbot (list): The chatbot conversation history.
-        game_state (dict): The current game state.
-
-    Returns:
-        None
-    """
-    if not filename.strip():
-        create_log("Error: Empty filename")
-        return
-    try:
-        # Sanitize filename
-        filename = re.sub(r'[^\w\-]', '', filename.strip())
-        if not filename:
-            create_log("Error: Invalid filename after sanitization")
-            return
-        os.makedirs('game_saves', exist_ok=True)
-        save_path = os.path.join('game_saves', f"{filename}.json")
-        save_data = {
-            'chatbot_history': chatbot,
-            'game_state': game_state
-        }
-        with open(save_path, 'w', encoding='utf-8') as f:
-            json.dump(save_data, f, ensure_ascii=False, indent=4)
-        if verbose:
-            create_log(f"Game saved to {save_path}")
-    except Exception as e:
-        create_log(f"Error in confirm_save: {str(e)}")
-
-def confirm_retrieve(selected_file):
-    """Loads a saved game state and chatbot history.
+def retrieve_game(selected_file, verbose=False):
+    """Loads a saved game state.
 
     Args:
         selected_file (str): The name of the save file to load.
 
     Returns:
-        tuple: (chatbot_history, image_path, game_state)
+        game_state
     """
     if not selected_file:
-        return [], DEFAULT_IMAGE_FILE_PATH, get_initial_game_state()
+        if verbose:
+            create_log("CONFIRM_RETRIEVE: No file selected. Returning initial game state.")
+        return get_initial_game_state()
     try:
-        save_path = os.path.join('game_saves', selected_file)
-        with open(save_path, 'r', encoding='utf-8') as f:
+        retrieve_path = os.path.join(SAVE_GAMES_PATH, selected_file)
+        with open(retrieve_path, 'r', encoding='utf-8') as f:
             save_data = json.load(f)
         return (
-            save_data.get('chatbot_history', []),
-            DEFAULT_IMAGE_FILE_PATH,
-            save_data.get('game_state', get_initial_game_state())
+            save_data.get('game_state')
         )
     except Exception as e:
-        if verbose:
-            create_log(f"Error in confirm_retrieve: {str(e)}")
-        return [], DEFAULT_IMAGE_FILE_PATH, get_initial_game_state()
+        create_log(f"CONFIRM_RETRIEVE: Error {str(e)} Returning initial game state.")
+        return get_initial_game_state()

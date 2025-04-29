@@ -73,7 +73,7 @@ def init_db_command():
     """Clear existing data and create new tables."""
     init_db()
     if verbose:
-        create_log("Initialized the database.")
+        create_log("APP ROUTE /INIT_DB: Initialized the database.")
 
 def format_chat_history(history):
     """Format chat history to include only user questions and assistant answers.
@@ -96,28 +96,32 @@ def format_chat_history(history):
 def index():
     """Render the index page and clear session history."""
     session['history'] = []
+    session.pop('output', None)  # Clear any old output
     if verbose:
-        create_log('entering index route')
-        create_log(f"session['history'] is now: {session['history']}")
-    return render_template("index.html")
+        create_log('APP ROUTE /: entering index route')
+        create_log(f"APP ROUTE /:session['history'] is now: {session['history']}")
+    response = make_response(render_template("index.html"))
+    response.headers['Cache-Control'] = 'no-store'
+    return response
 
 @app.route("/game", methods=["GET"])
 def game():
     """Initialize game state and render the game page."""
     session['history'] = [{"role": "system", "content": prompts.system_prompt}]
+    session.pop('output', None)  # Clear any old output
     if verbose:
-        create_log('entering game route')
-        create_log(f"session['history'] is now: {session['history']}")
+        create_log('APP ROUTE /GAME: entering game route')
+        create_log(f"APP ROUTE /GAME:session['history'] is now: {session['history']}")
     if 'game_state' not in session:
         if verbose:
-            create_log('game state not in session')
+            create_log('APP ROUTE /GAME:game state not in session')
         session['game_state'] = get_initial_game_state()
     session['history'].append({"role": "assistant", "content": world['description']})
     if verbose:
-        create_log(f'game_state in game route: \n{session["game_state"]}')
-        create_log(f"session['history'] after modification: \n{session['history']}")
+        create_log(f'APP ROUTE /GAME:game_state in game route: \n{session["game_state"]}')
+        create_log(f"APP ROUTE /GAME: session['history'] after modification: \n{session['history']}")
     response = make_response(render_template("game.html",
-                                            output=world['description'],
+                                            output="Bem-vindo a Luminaria! Digite um comando para começar.",
                                             output_image=session['game_state']["output_image"],
                                             chat_history=format_chat_history(session['history'])))
     response.headers['Cache-Control'] = 'no-store'
@@ -128,21 +132,30 @@ def process_command():
     """Process a user command and update game state."""
     command = request.form.get("command")
     if verbose:
-        create_log(f"entering command route:\ncommand is: {command}")
-    if 'history' not in session or 'game_state' not in session:
-        session['history'] = []
+        create_log(f"APP ROUTE /COMMAND: entering command route:\ncommand is: {command}")
+    # Initialize session if missing
+    if 'game_state' not in session:
         session['game_state'] = get_initial_game_state()
+    if 'history' not in session or not session['history']:
+        session['history'] = [
+            {"role": "system", "content": prompts.system_prompt},
+            {"role": "assistant", "content": world['description']}
+        ]
     if verbose:
-        create_log(f"process_command: history is: {session['history']} and type: {type(session['history'])} and game_state is: {session['game_state']}")
+        create_log(f"APP ROUTE /COMMAND: process_command: history before run_action: {session['history']} and type: {type(session['history'])}")
+    session.pop('output', None)  # Clear any old output
     output = run_action(command, session['game_state'], verbose=verbose)
     if verbose:
-        create_log(f"run_action output: {output}")
+        create_log(f"APP ROUTE /COMMAND: run_action output: {output}")
     # Ensure output is a string
     if not isinstance(output, str):
-        create_log(f"Error: run_action returned non-string: {type(output)}")
+        create_log(f"APP ROUTE /COMMAND: Error: run_action returned non-string: {type(output)}")
         output = "Error: Invalid response from run_action"
     session['history'] = session['game_state']['history']  # Sync history
     generated_image_path = session['game_state']['output_image']
+    if verbose:
+        create_log(f"APP ROUTE /COMMAND: process_command: history after run_action: {session['history']}")
+        create_log(f"APP ROUTE /COMMAND: Rendering game.html with output: {output}")
     response = make_response(render_template("game.html",
                                             output=output,
                                             output_image=generated_image_path,
@@ -165,12 +178,12 @@ def save():
 def load():
     """Load a saved game or display available saves."""
     if verbose:
-        create_log("Entering load game route")
+        create_log("APP ROUTE /RETRIEVE_GAME: Entering load game route")
     if request.method == "POST":
         selected_file = request.form.get("selected_file")
         session['history'], output_image, session['game_state'] = confirm_retrieve(selected_file)
         if verbose:
-            create_log("game loaded")
+            create_log("APP ROUTE /RETRIEVE_GAME: game loaded")
         response = make_response(render_template("game.html",
                                                 output="Game loaded!",
                                                 output_image=output_image,
@@ -178,7 +191,7 @@ def load():
         response.headers['Cache-Control'] = 'no-store'
         return response
     if verbose:
-        create_log("loading game")
+        create_log("APP ROUTE /RETRIEVE_GAME: loading game")
     save_files = retrieve_game()
     response = make_response(render_template("load_game.html", save_files=save_files))
     response.headers['Cache-Control'] = 'no-store'
