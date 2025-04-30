@@ -68,7 +68,7 @@ def load_world(filename):
             world = json.load(f)
         validate_world(world)
         if verbose:
-            create_log(f"\n\nLoaded world {world['name']}\n\n")
+            create_log(f"LOAD_WORLD: Loaded world {world['name']}")
         return world
     except FileNotFoundError:
         create_log(f"Error: File {filename} not found")
@@ -96,13 +96,16 @@ def get_world_info(game_state): #TODO: Verify if History and achievements are ne
         Your Inventory: \n{game_state['inventory']}\n
     """
 
-def get_initial_game_state():
+def get_initial_game_state(verbose=False):
     """Creates a new initial game state dictionary.
 
     Returns:
         dict: A deep copy of the initial game state.
     """
 
+    if verbose:
+        create_log("GET_INITIAL_GAME_STATE: Creating initial game state")
+    
     initial_history_text =  f"No mundo de Arkonix, as cidades são construídas sobre as costas \
         de enormes criaturas chamadas Leviatãs, que vagam pelo mundo como montanhas vivas. \
         Eldrida é um reino de florestas eternas, liderado pela rainha Lyra, protege a natureza \
@@ -115,7 +118,7 @@ def get_initial_game_state():
     initial_kingdom = world['kingdoms']['Eldrida']
     initial_town = initial_kingdom['towns']['Luminaria']
     initial_character = initial_town['npcs']['Eira Shadowglow']
-    start_image_prompt = world['description']
+    #start_image_prompt = world['description']
   
     initial_inventory = {
         "calça de pano": 1,
@@ -138,9 +141,11 @@ def get_initial_game_state():
         "output_image": DEFAULT_IMAGE_FILE_PATH,
         "history": [{"role": "assistant", "content":initial_history_text}]
     }
+    if verbose:
+        create_log(f"GET_INITIAL_GAME_STATE: output image: {output_image}")
     return initial_game_state #deepcopy(initial_game_state)
-
-def format_chat_history(history):
+'''
+def old_format_chat_history(history):
     """Format chat history to include only user questions and assistant answers.
 
     Args:
@@ -153,9 +158,24 @@ def format_chat_history(history):
     for entry in history:
         role = entry["role"]
         content = entry["content"].strip()
-        if role in ("user", "assistant") and content and content != world['description']:
-            formatted_history += f"{role.capitalize()}: {content}\n"
+        if role in ("user", "assistant") and content:
+            formatted_history += f"\n{content}\n"
     return formatted_history
+'''
+
+def format_chat_history(history, game_state):
+    # Extract character name from game_state['character']
+    # Assume name is the first word in the character description
+    character_name = game_state['character'].split()[0]  # Gets 'Eira' from 'Eira é uma jovem maga...'
+    
+    # Format each message, replacing 'user' with character name
+    formatted_messages = []
+    for msg in history:
+        role = character_name if msg['role'] == 'user' else msg['role']
+        formatted_messages.append(f"{role}: {msg['content']}")
+    
+    # Join with double newlines for extra spacing
+    return "\n\n".join(formatted_messages)
 
 def is_safe(message):
     """Checks if a message is safe using LlamaGuard.
@@ -402,7 +422,7 @@ def run_action(message, game_state, verbose=False):
         local_messages.append({"role": "assistant", "content": result})
         item_updates = detect_inventory_changes(game_state, result, verbose=verbose)
         update_inventory(game_state, item_updates, verbose=verbose)
-        updated_history = [{"role": "user", "content": message},{"role": "assistant", "content": result}]
+        updated_history = game_state['history'] + [{"role": "user", "content": message},{"role": "assistant", "content": result}]
         update_game_state(
             game_state,
             output_image=generated_image_path,
@@ -516,3 +536,6 @@ def retrieve_game(selected_file, verbose=False):
     except Exception as e:
         create_log(f"CONFIRM_RETRIEVE: Error {str(e)} Returning initial game state.")
         return get_initial_game_state()
+
+#message = [{'role': 'assistant', 'content': 'No mundo de Arkonix, as cidades são construídas sobre as costas         de enormes criaturas chamadas Leviatãs, que vagam pelo mundo como montanhas vivas.         Eldrida é um reino de florestas eternas, liderado pela rainha Lyra, protege a natureza         e seus habitantes. Sua capital, Luminária, construída sobre o Leviatã Estrela da Manhã,         é conhecida por suas ruas iluminadas por lanternas mágicas que refletem a luz dos olhos do Leviatã.'}]
+#print(format_chat_history(message))
