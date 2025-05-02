@@ -36,10 +36,10 @@ def get_relative_image_path(full_path):
     return full_path.split('static/')[-1] if 'static/' in full_path else full_path
 
 def get_relative_audio_path(full_path):
-    """Strip 'static/' from image path to get relative path for url_for."""
+    """Strip 'static/audio/' from image path to get relative path for url_for."""
     if not full_path:
         return "default_audio.mp3"
-    return full_path.split('static/audio/')[-1] if 'static/' in full_path else full_path
+    return full_path.split('static/')[-1] if 'static/' in full_path else full_path
 
 @app.route("/")
 def index():
@@ -94,9 +94,8 @@ def game():
         create_log(f"APP ROUTE /GAME: Raw image path: {raw_image_path}")
         create_log(f"APP ROUTE /GAME: Ambient sound: {ambient_sound}")
         create_log(f"APP ROUTE /GAME: Rendering game.html with image_filename: {image_filename}")
-        create_log(f"APP ROUTE /GAME: Rendering game.html with ambient_sound: {ambient_sound}")
         create_log(f"APP ROUTE /GAME: Image URL: {url_for('static', filename=image_filename)}")
-        create_log(f"APP ROUTE /GAME: Ambient sound URL: {url_for('static', filename=ambient_sound)}")
+        create_log(f"APP ROUTE /GAME: Ambient sound URL NEW: {url_for('static', filename=ambient_sound)}")
         create_log(f"APP ROUTE /GAME: game state history is now: {session['game_state']['history']}")
 
     response = make_response(render_template("game.html",
@@ -140,20 +139,78 @@ def process_command():
     
     session.modified = True
     save_temp_game_state(session['game_state'], verbose=verbose)
+    ambient_sound = get_relative_audio_path(session['game_state']['ambient_sound'])
+
     
     raw_image_path = session['game_state']['output_image']
     image_filename = get_relative_image_path(raw_image_path)
     if verbose:
         create_log(f"APP ROUTE /COMMAND: Raw image path: {raw_image_path}")
+        create_log(f"APP ROUTE /COMMAND: Ambient sound: {ambient_sound}")
         create_log(f"APP ROUTE /COMMAND: Rendering game.html with image_filename: {image_filename}")
         create_log(f"APP ROUTE /COMMAND: Image URL: {url_for('static', filename=image_filename)}")
+        create_log(f"APP ROUTE /COMMAND: Ambient sound URL: {url_for('static', filename=ambient_sound)}")
+
     
     response = make_response(render_template("game.html",
                                             output="",
                                             output_image=image_filename,
+                                            ambient_sound=ambient_sound,
                                             chat_history=format_chat_history(session['game_state']['history'], session['game_state'])))
     response.headers['Cache-Control'] = 'no-store'
     return response
+
+@app.route("/new_game", methods=["POST"])
+def new_game():
+    """Start a new game by clearing session, temp saves, and initializing game state."""
+    session.permanent = True
+    if verbose:
+        create_log("APP ROUTE /NEW_GAME: Entering new game route")
+        create_log(f"APP ROUTE /NEW_GAME: Session ID: {session.get('_id', 'Unknown')}")
+        create_log(f"APP ROUTE /NEW_GAME: Session contents: {dict(session)}")
+        create_log(f"APP ROUTE /NEW_GAME: Timestamp: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+
+    # Clear session
+    session.clear()
+    if verbose:
+        create_log("APP ROUTE /NEW_GAME: Session cleared")
+
+    # Delete temporary save file
+    clean_temp_saves(verbose=verbose, force=True)
+    if verbose:
+        create_log("APP ROUTE /NEW_GAME: Temporary saves cleaned")
+
+    # Initialize new game state
+    session['game_state'] = get_initial_game_state(verbose=verbose)
+    session.modified = True
+    if verbose:
+        create_log("APP ROUTE /NEW_GAME: New game state initialized")
+
+    # Prepare response
+    raw_image_path = session['game_state']['output_image']
+    image_filename = get_relative_image_path(raw_image_path)
+    ambient_sound = get_relative_audio_path(session['game_state']['ambient_sound'])
+    if verbose:
+        create_log(f"APP ROUTE /NEW_GAME: Raw image path: {raw_image_path}")
+        create_log(f"APP ROUTE /NEW_GAME: Ambient sound: {ambient_sound}")
+        create_log(f"APP ROUTE /NEW_GAME: Rendering game.html with image_filename: {image_filename}")
+        create_log(f"APP ROUTE /NEW_GAME: Image URL: {url_for('static', filename=image_filename)}")
+        create_log(f"APP ROUTE /NEW_GAME: Ambient sound URL: {url_for('static', filename=ambient_sound)}")
+
+    response = make_response(render_template("game.html",
+                                            output="New game started!",
+                                            output_image=image_filename,
+                                            ambient_sound=ambient_sound,
+                                            chat_history=format_chat_history(session['game_state']['history'], session['game_state'])))
+    response.headers['Cache-Control'] = 'no-store'
+    
+    # Clear session cookie
+    response.set_cookie('rpg_session', '', expires=0)
+    if verbose:
+        create_log("APP ROUTE /NEW_GAME: Session cookie cleared")
+
+    return response
+
 
 @app.route("/save_game", methods=["POST"])
 def save():
@@ -231,16 +288,20 @@ def load():
             if verbose:
                 create_log(f"APP ROUTE /RETRIEVE_GAME: Loaded game: {selected_file}")
             
-            raw_image_path = session['game_state']['output_image']
+            raw_image_path = session['game_state']['output_image']            
             image_filename = get_relative_image_path(raw_image_path)
+            ambient_sound = get_relative_audio_path(session['game_state']['ambient_sound'])
             if verbose:
                 create_log(f"APP ROUTE /RETRIEVE_GAME: Raw image path: {raw_image_path}")
+                create_log(f"APP ROUTE /RETRIEVE_GAME: Ambient sound: {ambient_sound}")
                 create_log(f"APP ROUTE /RETRIEVE_GAME: Rendering game.html with image_filename: {image_filename}")
                 create_log(f"APP ROUTE /RETRIEVE_GAME: Image URL: {url_for('static', filename=image_filename)}")
-            
+                create_log(f"APP ROUTE /RETRIEVE_GAME: Ambient sound URL: {url_for('static', filename=ambient_sound)}")
+
             response = make_response(render_template("game.html",
                                                     output="Game loaded!",
                                                     output_image=image_filename,
+                                                    ambient_sound=ambient_sound,
                                                     chat_history=format_chat_history(session['game_state']['history'], session['game_state'])))
             response.headers['Cache-Control'] = 'no-store'
             return response
@@ -265,4 +326,3 @@ def load():
     response.headers['Cache-Control'] = 'no-store'
     return response
 
-#TODO: insert new game button in /game route

@@ -3,6 +3,8 @@ import json
 import datetime
 import os
 import re
+import glob
+import time
 from copy import deepcopy
 from dotenv import dotenv_values
 from together import Together
@@ -20,9 +22,12 @@ client = Together(api_key=together_api_key)
 MODEL = "meta-llama/Llama-3-70b-chat-hf"
 IMAGE_MODEL = "black-forest-labs/FLUX.1-schnell-Free"
 DEFAULT_IMAGE_FILE_PATH = os.path.join('static', 'default_image.png')
+DEFAULT_AUDIO_FILE_PATH = os.path.join('static/audio', 'default_audio.mp3')
 IMAGE_FILE_PREFIX = os.path.join('static/image', 'output_image')
 WORLD_PATH = os.path.join('.', 'SeuMundo_L1.json')
 SAVE_GAMES_PATH = 'game_saves'
+
+last_saved_history = None
 
 def validate_world(world):
     """Validates the structure of the world JSON file.
@@ -91,6 +96,7 @@ def get_world_info(game_state): #TODO: Verify if History and achievements are ne
         World: \n{game_state['world']}\n
         Kingdom: \n{game_state['kingdom']}\n
         Town: \n{game_state['town']}\n
+        NPCs: \n{game_state['npcs']}\n
         Your Character: \n{game_state['character']}\n
         Your Inventory: \n{game_state['inventory']}\n
     """
@@ -104,13 +110,17 @@ def validate_game_state(game_state, verbose=False):
     Raises:
         ValueError: If required keys or structure are missing.
     """
-    required_keys = ['world', 'kingdom', 'town', 'character', 'inventory', 'achievements', 'output_image', 'ambient_sound', 'history']
+    required_keys = ['world', 'kingdom', 'town', 'npcs', 'character', 'inventory', 'achievements', 'output_image', 'ambient_sound', 'history']
     for key in required_keys:
         if key not in game_state:
-            raise ValueError(f"Missing key {key} in world JSON")
             if verbose:
                 create_log(f"VALIDATE_GAME_STATE: Missing key {key} in world JSON")
-
+            raise ValueError(f"Missing key {key} in game_state JSON")
+            return False
+    if verbose:
+        create_log(f"VALIDATE_GAME_STATE: Game state is valid")
+    return True
+    
 def get_initial_game_state(verbose=False):
     """Creates a new initial game state dictionary.
 
@@ -132,8 +142,8 @@ def get_initial_game_state(verbose=False):
 
     initial_kingdom = world['kingdoms']['Eldrida']
     initial_town = initial_kingdom['towns']['Luminaria']
+    initial_npcs = initial_town['npcs']
     initial_character = initial_town['npcs']['Eira Shadowglow']
-    #start_image_prompt = world['description']
   
     initial_inventory = {
         "calça de pano": 1,
@@ -150,15 +160,40 @@ def get_initial_game_state(verbose=False):
         "world": world['description'],
         "kingdom": initial_kingdom['description'],
         "town": initial_town['description'],
-        "character": initial_character['description'],
+        "npcs": initial_npcs,
+        "character": initial_character['name'],
         "inventory": initial_inventory,
         "achievements": "",
         "output_image": DEFAULT_IMAGE_FILE_PATH,
+        "ambient_sound": DEFAULT_AUDIO_FILE_PATH,
         "history": [{"role": "assistant", "content":initial_history_text}]
     }
     if verbose:
-        create_log(f"GET_INITIAL_GAME_STATE: output image: {output_image}")
+        create_log(f"GET_INITIAL_GAME_STATE: output image: {initial_game_state['output_image']}")
     return initial_game_state #deepcopy(initial_game_state)
+
+def load_temp_game_state(verbose=False):
+    """Load game_state from temporary file if it exists."""
+    temp_save_path = 'temp_saves/last_session.json'
+    try:
+        if os.path.exists(temp_save_path):
+            with open(temp_save_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                game_state = data.get('game_state')
+                if validate_game_state(game_state):
+                    if verbose:
+                        create_log(f"LOAD_TEMP_GAME_STATE: Loaded game state from {temp_save_path}")
+                    return game_state
+                else:
+                    if verbose:
+                        create_log(f"LOAD_TEMP_GAME_STATE: Invalid game state in {temp_save_path}")
+        else:
+            if verbose:
+                create_log(f"LOAD_TEMP_GAME_STATE: No temp save file found at {temp_save_path}")
+    except Exception as e:
+        if verbose:
+            create_log(f"LOAD_TEMP_GAME_STATE: Error loading temp game state: {str(e)}")
+    return None
 
 def format_chat_history(history, game_state):
     # Extract character name from game_state['character']
@@ -436,31 +471,21 @@ def run_action(message, game_state, verbose=False):
             create_log(f"Error in run_action: {str(e)}")
         return "Error in run_action - Something went wrong."
 
-
-
-def save_game(game_state, verbose=False):
-    """Saves the game state and chatbot history to a JSON file.
-
-    Args:
-        history (list): The chatbot conversation history.
-        game_state (dict): The current game state.
-
-    Returns:
-        None
-    """
-    try:
-        os.makedirs('game_saves', exist_ok=True)
-        timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-        save_path = os.path.join('game_saves', f"{timestamp}.json")
-        save_data = {
-            'game_state': game_state
-        }
-        with open(save_path, 'w', encoding='utf-8') as f:
-            json.dump(save_data, f, ensure_ascii=False, indent=4)
-        if verbose:
-            create_log(f"SAVE_GAME: Game saved to {save_path}")
-    except Exception as e:
-        create_log(f"SAVE_GAME: Error in save_game: {str(e)}")
+def save_temp_game_state(game_state, verbose=False):
+    """Save game_state to a temporary file for recovery."""
+    global last_saved_history
+    if last_saved_history != game_state['history']:
+        try:
+            os.makedirs('temp_saves', exist_ok=True)
+            temp_save_path = 'temp_saves/last_session.json'
+            with open(temp_save_path, 'w', encoding='utf-8') as f:
+                json.dump({'game_state': game_state}, f, ensure_ascii=False, indent=4)
+            last_saved_history = game_state['history']
+            if verbose:
+                create_log(f"SAVE_TEMP_GAME_STATE: Saved game state to {temp_save_path}")
+        except Exception as e:
+            if verbose:
+                create_log(f"SAVE_TEMP_GAME_STATE: Error saving temp game state: {str(e)}")
 
 def confirm_save(filename, game_state, verbose=False):
     """Saves the game with a user-specified filename.
@@ -579,3 +604,15 @@ def retrieve_game(selected_file, verbose=False):
         if verbose:
             create_log(f"RETRIEVE_GAME: Error loading game: {str(e)}")
         raise
+
+def clean_temp_saves(verbose=False, force=False):
+    temp_save_path = 'temp_saves/last_session.json'
+    if os.path.exists(temp_save_path):
+        if force or time.time() - os.path.getmtime(temp_save_path) > 86400:  # 24 hours
+            os.remove(temp_save_path)
+            if verbose:
+                create_log("CLEAN_TEMP_SAVES: Removed temp save")
+
+                
+#teste = get_initial_game_state(verbose=True) #TODO: be sure that LLM get's NPC info
+#print(teste['npcs'])

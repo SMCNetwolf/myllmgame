@@ -5,7 +5,7 @@ import json
 from flask import Flask, render_template, request, session, redirect, url_for, flash, make_response
 from flask_session import Session
 from dotenv import load_dotenv
-from main_flask import run_action, get_initial_game_state, format_chat_history, confirm_save, retrieve_game_list, retrieve_game
+from main_flask import run_action, get_initial_game_state, save_temp_game_state, load_temp_game_state, format_chat_history, validate_game_state, confirm_save, retrieve_game_list, retrieve_game, clean_temp_saves, DEFAULT_IMAGE_FILE_PATH, DEFAULT_AUDIO_FILE_PATH, last_saved_history
 import time
 
 # Load environment variables
@@ -35,61 +35,11 @@ def get_relative_image_path(full_path):
         return "default_image.png"
     return full_path.split('static/')[-1] if 'static/' in full_path else full_path
 
-def validate_game_state(game_state):
-    """Validate that game_state has required keys."""
-    required_keys = ['world', 'kingdom', 'town', 'character', 'inventory', 'history', 'output_image']
-    return isinstance(game_state, dict) and all(key in game_state for key in required_keys)
-
-def save_temp_game_state(game_state, verbose=False):
-    """Save game_state to a temporary file for recovery."""
-    global last_saved_history
-    if last_saved_history != game_state['history']:
-        try:
-            os.makedirs('temp_saves', exist_ok=True)
-            temp_save_path = 'temp_saves/last_session.json'
-            with open(temp_save_path, 'w', encoding='utf-8') as f:
-                json.dump({'game_state': game_state}, f, ensure_ascii=False, indent=4)
-            last_saved_history = game_state['history']
-            if verbose:
-                create_log(f"SAVE_TEMP_GAME_STATE: Saved game state to {temp_save_path}")
-        except Exception as e:
-            if verbose:
-                create_log(f"SAVE_TEMP_GAME_STATE: Error saving temp game state: {str(e)}")
-
-def load_temp_game_state(verbose=False):
-    """Load game_state from temporary file if it exists."""
-    temp_save_path = 'temp_saves/last_session.json'
-    try:
-        if os.path.exists(temp_save_path):
-            with open(temp_save_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                game_state = data.get('game_state')
-                if validate_game_state(game_state):
-                    if verbose:
-                        create_log(f"LOAD_TEMP_GAME_STATE: Loaded game state from {temp_save_path}")
-                    return game_state
-                else:
-                    if verbose:
-                        create_log(f"LOAD_TEMP_GAME_STATE: Invalid game state in {temp_save_path}")
-        else:
-            if verbose:
-                create_log(f"LOAD_TEMP_GAME_STATE: No temp save file found at {temp_save_path}")
-    except Exception as e:
-        if verbose:
-            create_log(f"LOAD_TEMP_GAME_STATE: Error loading temp game state: {str(e)}")
-    return None
-
-def clean_temp_saves(verbose=False):
-    import glob
-    import time
-    temp_save_path = 'temp_saves/last_session.json'
-    if os.path.exists(temp_save_path):
-        if time.time() - os.path.getmtime(temp_save_path) > 86400:  # 24 hours
-            os.remove(temp_save_path)
-            if verbose:
-                create_log("CLEAN_TEMP_SAVES: Removed old temp save")
-
-last_saved_history = None
+def get_relative_audio_path(full_path):
+    """Strip 'static/audio/' from image path to get relative path for url_for."""
+    if not full_path:
+        return "default_audio.mp3"
+    return full_path.split('static/')[-1] if 'static/' in full_path else full_path
 
 @app.route("/")
 def index():
@@ -101,26 +51,15 @@ def index():
         create_log(f'APP ROUTE /: Session contents: {dict(session)}')
         create_log(f'APP ROUTE /: Timestamp: {time.strftime("%Y-%m-%d %H:%M:%S")}')
 
-    if 'game_state' not in session or not validate_game_state(session['game_state']):
-        temp_game_state = load_temp_game_state(verbose=verbose)
-        if temp_game_state:
-            session['game_state'] = temp_game_state
-            if verbose:
-                create_log('APP ROUTE /: Restored game state from temp save')
-        else:
-            if verbose:
-                create_log('APP ROUTE /: Game state was not in session or invalid. Initializing game state')
-            session['game_state'] = get_initial_game_state()
+    if 'game_state' not in session:
+        get_initial_game_state(verbose=verbose)
+        if verbose:
+            create_log('APP ROUTE /: Game state was not in session. Initializing game state')
+        session['game_state'] = get_initial_game_state()
+        validate_game_state(session['game_state'],verbose=verbose)
         session.modified = True
         if verbose:
-            create_log(f"APP ROUTE /: Game state initialized: {session['game_state']}")
-
-    raw_image_path = session['game_state']['output_image']
-    image_filename = get_relative_image_path(raw_image_path)
-    if verbose:
-        create_log(f"APP ROUTE /: Raw image path: {raw_image_path}")
-        create_log(f"APP ROUTE /: Rendering index.html with image_filename: {image_filename}")
-        create_log(f"APP ROUTE /: Image URL: {url_for('static', filename=image_filename)}")
+            create_log(f"APP ROUTE /: Game state initialized")
 
     response = make_response(render_template("index.html"))
     response.headers['Cache-Control'] = 'no-store'
@@ -150,15 +89,19 @@ def game():
 
     raw_image_path = session['game_state']['output_image']
     image_filename = get_relative_image_path(raw_image_path)
+    ambient_sound = get_relative_audio_path(session['game_state']['ambient_sound'])
     if verbose:
         create_log(f"APP ROUTE /GAME: Raw image path: {raw_image_path}")
+        create_log(f"APP ROUTE /GAME: Ambient sound: {ambient_sound}")
         create_log(f"APP ROUTE /GAME: Rendering game.html with image_filename: {image_filename}")
         create_log(f"APP ROUTE /GAME: Image URL: {url_for('static', filename=image_filename)}")
+        create_log(f"APP ROUTE /GAME: Ambient sound URL NEW: {url_for('static', filename=ambient_sound)}")
         create_log(f"APP ROUTE /GAME: game state history is now: {session['game_state']['history']}")
 
     response = make_response(render_template("game.html",
                                             output="",
                                             output_image=image_filename,
+                                            ambient_sound=ambient_sound,
                                             chat_history=format_chat_history(session['game_state']['history'], session['game_state'])))
     response.headers['Cache-Control'] = 'no-store'
     return response
@@ -196,20 +139,78 @@ def process_command():
     
     session.modified = True
     save_temp_game_state(session['game_state'], verbose=verbose)
+    ambient_sound = get_relative_audio_path(session['game_state']['ambient_sound'])
+
     
     raw_image_path = session['game_state']['output_image']
     image_filename = get_relative_image_path(raw_image_path)
     if verbose:
         create_log(f"APP ROUTE /COMMAND: Raw image path: {raw_image_path}")
+        create_log(f"APP ROUTE /COMMAND: Ambient sound: {ambient_sound}")
         create_log(f"APP ROUTE /COMMAND: Rendering game.html with image_filename: {image_filename}")
         create_log(f"APP ROUTE /COMMAND: Image URL: {url_for('static', filename=image_filename)}")
+        create_log(f"APP ROUTE /COMMAND: Ambient sound URL: {url_for('static', filename=ambient_sound)}")
+
     
     response = make_response(render_template("game.html",
                                             output="",
                                             output_image=image_filename,
+                                            ambient_sound=ambient_sound,
                                             chat_history=format_chat_history(session['game_state']['history'], session['game_state'])))
     response.headers['Cache-Control'] = 'no-store'
     return response
+
+@app.route("/new_game", methods=["POST"])
+def new_game():
+    """Start a new game by clearing session, temp saves, and initializing game state."""
+    session.permanent = True
+    if verbose:
+        create_log("APP ROUTE /NEW_GAME: Entering new game route")
+        create_log(f"APP ROUTE /NEW_GAME: Session ID: {session.get('_id', 'Unknown')}")
+        create_log(f"APP ROUTE /NEW_GAME: Session contents: {dict(session)}")
+        create_log(f"APP ROUTE /NEW_GAME: Timestamp: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+
+    # Clear session
+    session.clear()
+    if verbose:
+        create_log("APP ROUTE /NEW_GAME: Session cleared")
+
+    # Delete temporary save file
+    clean_temp_saves(verbose=verbose, force=True)
+    if verbose:
+        create_log("APP ROUTE /NEW_GAME: Temporary saves cleaned")
+
+    # Initialize new game state
+    session['game_state'] = get_initial_game_state(verbose=verbose)
+    session.modified = True
+    if verbose:
+        create_log("APP ROUTE /NEW_GAME: New game state initialized")
+
+    # Prepare response
+    raw_image_path = session['game_state']['output_image']
+    image_filename = get_relative_image_path(raw_image_path)
+    ambient_sound = get_relative_audio_path(session['game_state']['ambient_sound'])
+    if verbose:
+        create_log(f"APP ROUTE /NEW_GAME: Raw image path: {raw_image_path}")
+        create_log(f"APP ROUTE /NEW_GAME: Ambient sound: {ambient_sound}")
+        create_log(f"APP ROUTE /NEW_GAME: Rendering game.html with image_filename: {image_filename}")
+        create_log(f"APP ROUTE /NEW_GAME: Image URL: {url_for('static', filename=image_filename)}")
+        create_log(f"APP ROUTE /NEW_GAME: Ambient sound URL: {url_for('static', filename=ambient_sound)}")
+
+    response = make_response(render_template("game.html",
+                                            output="New game started!",
+                                            output_image=image_filename,
+                                            ambient_sound=ambient_sound,
+                                            chat_history=format_chat_history(session['game_state']['history'], session['game_state'])))
+    response.headers['Cache-Control'] = 'no-store'
+    
+    # Clear session cookie
+    response.set_cookie('rpg_session', '', expires=0)
+    if verbose:
+        create_log("APP ROUTE /NEW_GAME: Session cookie cleared")
+
+    return response
+
 
 @app.route("/save_game", methods=["POST"])
 def save():
@@ -287,16 +288,20 @@ def load():
             if verbose:
                 create_log(f"APP ROUTE /RETRIEVE_GAME: Loaded game: {selected_file}")
             
-            raw_image_path = session['game_state']['output_image']
+            raw_image_path = session['game_state']['output_image']            
             image_filename = get_relative_image_path(raw_image_path)
+            ambient_sound = get_relative_audio_path(session['game_state']['ambient_sound'])
             if verbose:
                 create_log(f"APP ROUTE /RETRIEVE_GAME: Raw image path: {raw_image_path}")
+                create_log(f"APP ROUTE /RETRIEVE_GAME: Ambient sound: {ambient_sound}")
                 create_log(f"APP ROUTE /RETRIEVE_GAME: Rendering game.html with image_filename: {image_filename}")
                 create_log(f"APP ROUTE /RETRIEVE_GAME: Image URL: {url_for('static', filename=image_filename)}")
-            
+                create_log(f"APP ROUTE /RETRIEVE_GAME: Ambient sound URL: {url_for('static', filename=ambient_sound)}")
+
             response = make_response(render_template("game.html",
                                                     output="Game loaded!",
                                                     output_image=image_filename,
+                                                    ambient_sound=ambient_sound,
                                                     chat_history=format_chat_history(session['game_state']['history'], session['game_state'])))
             response.headers['Cache-Control'] = 'no-store'
             return response
@@ -320,3 +325,4 @@ def load():
     response = make_response(render_template("load_game.html", save_files=save_files))
     response.headers['Cache-Control'] = 'no-store'
     return response
+

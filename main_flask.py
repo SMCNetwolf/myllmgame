@@ -605,14 +605,14 @@ def retrieve_game(selected_file, verbose=False):
             create_log(f"RETRIEVE_GAME: Error loading game: {str(e)}")
         raise
 
-def clean_temp_saves(verbose=False):
+def clean_temp_saves(verbose=False, force=False):
     temp_save_path = 'temp_saves/last_session.json'
     if os.path.exists(temp_save_path):
-        if time.time() - os.path.getmtime(temp_save_path) > 86400:  # 24 hours
+        if force or time.time() - os.path.getmtime(temp_save_path) > 86400:  # 24 hours
             os.remove(temp_save_path)
             if verbose:
-                create_log("CLEAN_TEMP_SAVES: Removed old temp save")
+                create_log("CLEAN_TEMP_SAVES: Removed temp save")
 
+                
 #teste = get_initial_game_state(verbose=True) #TODO: be sure that LLM get's NPC info
 #print(teste['npcs'])
-#TODO: insert sound
