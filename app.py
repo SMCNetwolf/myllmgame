@@ -51,16 +51,11 @@ def index():
         create_log(f'APP ROUTE /: Session contents: {dict(session)}')
         create_log(f'APP ROUTE /: Timestamp: {time.strftime("%Y-%m-%d %H:%M:%S")}')
 
-    if 'game_state' not in session or not validate_game_state(session['game_state']):
-        temp_game_state = load_temp_game_state(verbose=verbose)
-        if temp_game_state:
-            session['game_state'] = temp_game_state
-            if verbose:
-                create_log('APP ROUTE /: Restored game state from temp save')
-        else:
-            if verbose:
-                create_log('APP ROUTE /: Game state was not in session or invalid. Initializing game state')
-            session['game_state'] = get_initial_game_state()
+    if 'game_state' not in session:
+        get_initial_game_state(verbose=verbose)
+        if verbose:
+            create_log('APP ROUTE /: Game state was not in session. Initializing game state')
+        session['game_state'] = get_initial_game_state()
         validate_game_state(session['game_state'],verbose=verbose)
         session.modified = True
         if verbose:
@@ -94,15 +89,20 @@ def game():
 
     raw_image_path = session['game_state']['output_image']
     image_filename = get_relative_image_path(raw_image_path)
+    ambient_sound = get_relative_audio_path(session['game_state']['ambient_sound'])
     if verbose:
         create_log(f"APP ROUTE /GAME: Raw image path: {raw_image_path}")
+        create_log(f"APP ROUTE /GAME: Ambient sound: {ambient_sound}")
         create_log(f"APP ROUTE /GAME: Rendering game.html with image_filename: {image_filename}")
+        create_log(f"APP ROUTE /GAME: Rendering game.html with ambient_sound: {ambient_sound}")
         create_log(f"APP ROUTE /GAME: Image URL: {url_for('static', filename=image_filename)}")
+        create_log(f"APP ROUTE /GAME: Ambient sound URL: {url_for('static', filename=ambient_sound)}")
         create_log(f"APP ROUTE /GAME: game state history is now: {session['game_state']['history']}")
 
     response = make_response(render_template("game.html",
                                             output="",
                                             output_image=image_filename,
+                                            ambient_sound=ambient_sound,
                                             chat_history=format_chat_history(session['game_state']['history'], session['game_state'])))
     response.headers['Cache-Control'] = 'no-store'
     return response
@@ -264,3 +264,5 @@ def load():
     response = make_response(render_template("load_game.html", save_files=save_files))
     response.headers['Cache-Control'] = 'no-store'
     return response
+
+#TODO: insert new game button in /game route

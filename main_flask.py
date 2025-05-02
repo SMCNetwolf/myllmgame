@@ -96,6 +96,7 @@ def get_world_info(game_state): #TODO: Verify if History and achievements are ne
         World: \n{game_state['world']}\n
         Kingdom: \n{game_state['kingdom']}\n
         Town: \n{game_state['town']}\n
+        NPCs: \n{game_state['npcs']}\n
         Your Character: \n{game_state['character']}\n
         Your Inventory: \n{game_state['inventory']}\n
     """
@@ -109,7 +110,7 @@ def validate_game_state(game_state, verbose=False):
     Raises:
         ValueError: If required keys or structure are missing.
     """
-    required_keys = ['world', 'kingdom', 'town', npcs, 'character', 'inventory', 'achievements', 'output_image', 'ambient_sound', 'history']
+    required_keys = ['world', 'kingdom', 'town', 'npcs', 'character', 'inventory', 'achievements', 'output_image', 'ambient_sound', 'history']
     for key in required_keys:
         if key not in game_state:
             if verbose:
@@ -612,5 +613,6 @@ def clean_temp_saves(verbose=False):
             if verbose:
                 create_log("CLEAN_TEMP_SAVES: Removed old temp save")
 
-teste = get_initial_game_state(verbose=True)
-print(teste['npcs'])
+#teste = get_initial_game_state(verbose=True) #TODO: be sure that LLM get's NPC info
+#print(teste['npcs'])
+#TODO: insert sound
