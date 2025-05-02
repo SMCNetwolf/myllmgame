@@ -5,3 +5,6 @@ autopep8
 # App
 langchain_core
 Pillow # PIL image-loading library
+
+#TODO: these requirements are not reliale. Verify and freeze
+flask-session

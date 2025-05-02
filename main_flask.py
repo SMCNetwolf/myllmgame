@@ -3,12 +3,13 @@ import json
 import datetime
 import os
 import re
+import glob
+import time
 from copy import deepcopy
 from dotenv import dotenv_values
 from together import Together
 import prompts
 from create_log import verbose, create_log
-
 
 # Load API key from .env file
 env_vars = dotenv_values('.env')
@@ -21,9 +22,12 @@ client = Together(api_key=together_api_key)
 MODEL = "meta-llama/Llama-3-70b-chat-hf"
 IMAGE_MODEL = "black-forest-labs/FLUX.1-schnell-Free"
 DEFAULT_IMAGE_FILE_PATH = os.path.join('static', 'default_image.png')
-IMAGE_FILE_PREFIX = os.path.join('static/image', 'output_image')  # No .png extension
+DEFAULT_AUDIO_FILE_PATH = os.path.join('static/audio', 'default_audio.mp3')
+IMAGE_FILE_PREFIX = os.path.join('static/image', 'output_image')
 WORLD_PATH = os.path.join('.', 'SeuMundo_L1.json')
 SAVE_GAMES_PATH = 'game_saves'
+
+last_saved_history = None
 
 def validate_world(world):
     """Validates the structure of the world JSON file.
@@ -96,6 +100,26 @@ def get_world_info(game_state): #TODO: Verify if History and achievements are ne
         Your Inventory: \n{game_state['inventory']}\n
     """
 
+def validate_game_state(game_state, verbose=False):
+    """Validates the structure of the game_state JSON file.
+
+    Args:
+        game_state (dict): The loaded world JSON data.
+
+    Raises:
+        ValueError: If required keys or structure are missing.
+    """
+    required_keys = ['world', 'kingdom', 'town', npcs, 'character', 'inventory', 'achievements', 'output_image', 'ambient_sound', 'history']
+    for key in required_keys:
+        if key not in game_state:
+            if verbose:
+                create_log(f"VALIDATE_GAME_STATE: Missing key {key} in world JSON")
+            raise ValueError(f"Missing key {key} in game_state JSON")
+            return False
+    if verbose:
+        create_log(f"VALIDATE_GAME_STATE: Game state is valid")
+    return True
+    
 def get_initial_game_state(verbose=False):
     """Creates a new initial game state dictionary.
 
@@ -117,8 +141,8 @@ def get_initial_game_state(verbose=False):
 
     initial_kingdom = world['kingdoms']['Eldrida']
     initial_town = initial_kingdom['towns']['Luminaria']
+    initial_npcs = initial_town['npcs']
     initial_character = initial_town['npcs']['Eira Shadowglow']
-    #start_image_prompt = world['description']
   
     initial_inventory = {
         "calça de pano": 1,
@@ -135,33 +159,40 @@ def get_initial_game_state(verbose=False):
         "world": world['description'],
         "kingdom": initial_kingdom['description'],
         "town": initial_town['description'],
-        "character": initial_character['description'],
+        "npcs": initial_npcs,
+        "character": initial_character['name'],
         "inventory": initial_inventory,
         "achievements": "",
         "output_image": DEFAULT_IMAGE_FILE_PATH,
+        "ambient_sound": DEFAULT_AUDIO_FILE_PATH,
         "history": [{"role": "assistant", "content":initial_history_text}]
     }
     if verbose:
-        create_log(f"GET_INITIAL_GAME_STATE: output image: {output_image}")
+        create_log(f"GET_INITIAL_GAME_STATE: output image: {initial_game_state['output_image']}")
     return initial_game_state #deepcopy(initial_game_state)
-'''
-def old_format_chat_history(history):
-    """Format chat history to include only user questions and assistant answers.
 
-    Args:
-        history (list): List of message dictionaries with 'role' and 'content'.
-
-    Returns:
-        str: Formatted string containing only user and assistant messages.
-    """
-    formatted_history = ""
-    for entry in history:
-        role = entry["role"]
-        content = entry["content"].strip()
-        if role in ("user", "assistant") and content:
-            formatted_history += f"\n{content}\n"
-    return formatted_history
-'''
+def load_temp_game_state(verbose=False):
+    """Load game_state from temporary file if it exists."""
+    temp_save_path = 'temp_saves/last_session.json'
+    try:
+        if os.path.exists(temp_save_path):
+            with open(temp_save_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                game_state = data.get('game_state')
+                if validate_game_state(game_state):
+                    if verbose:
+                        create_log(f"LOAD_TEMP_GAME_STATE: Loaded game state from {temp_save_path}")
+                    return game_state
+                else:
+                    if verbose:
+                        create_log(f"LOAD_TEMP_GAME_STATE: Invalid game state in {temp_save_path}")
+        else:
+            if verbose:
+                create_log(f"LOAD_TEMP_GAME_STATE: No temp save file found at {temp_save_path}")
+    except Exception as e:
+        if verbose:
+            create_log(f"LOAD_TEMP_GAME_STATE: Error loading temp game state: {str(e)}")
+    return None
 
 def format_chat_history(history, game_state):
     # Extract character name from game_state['character']
@@ -439,31 +470,21 @@ def run_action(message, game_state, verbose=False):
             create_log(f"Error in run_action: {str(e)}")
         return "Error in run_action - Something went wrong."
 
-
-
-def save_game(game_state, verbose=False):
-    """Saves the game state and chatbot history to a JSON file.
-
-    Args:
-        history (list): The chatbot conversation history.
-        game_state (dict): The current game state.
-
-    Returns:
-        None
-    """
-    try:
-        os.makedirs('game_saves', exist_ok=True)
-        timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-        save_path = os.path.join('game_saves', f"{timestamp}.json")
-        save_data = {
-            'game_state': game_state
-        }
-        with open(save_path, 'w', encoding='utf-8') as f:
-            json.dump(save_data, f, ensure_ascii=False, indent=4)
-        if verbose:
-            create_log(f"SAVE_GAME: Game saved to {save_path}")
-    except Exception as e:
-        create_log(f"SAVE_GAME: Error in save_game: {str(e)}")
+def save_temp_game_state(game_state, verbose=False):
+    """Save game_state to a temporary file for recovery."""
+    global last_saved_history
+    if last_saved_history != game_state['history']:
+        try:
+            os.makedirs('temp_saves', exist_ok=True)
+            temp_save_path = 'temp_saves/last_session.json'
+            with open(temp_save_path, 'w', encoding='utf-8') as f:
+                json.dump({'game_state': game_state}, f, ensure_ascii=False, indent=4)
+            last_saved_history = game_state['history']
+            if verbose:
+                create_log(f"SAVE_TEMP_GAME_STATE: Saved game state to {temp_save_path}")
+        except Exception as e:
+            if verbose:
+                create_log(f"SAVE_TEMP_GAME_STATE: Error saving temp game state: {str(e)}")
 
 def confirm_save(filename, game_state, verbose=False):
     """Saves the game with a user-specified filename.
@@ -471,46 +492,69 @@ def confirm_save(filename, game_state, verbose=False):
     Args:
         filename (str): The desired filename (without .json).
         game_state (dict): The current game state.
+        verbose (bool): If True, log the process.
 
-    Returns:
-        None
+    Raises:
+        ValueError: If filename is invalid or file already exists.
     """
-    if not filename.strip():
-        create_log("CONFIRM_SAVE: Error: Empty filename")
-        return
-    try:
-        # Sanitize filename
-        filename = re.sub(r'[^\w\-]', '', filename.strip())
-        if not filename:
+    if not filename or not filename.strip():
+        if verbose:
+            create_log("CONFIRM_SAVE: Error: Empty filename")
+        raise ValueError("Filename cannot be empty")
+    
+    # Sanitize filename
+    filename = re.sub(r'[^\w\-]', '', filename.strip())
+    if not filename:
+        if verbose:
             create_log("CONFIRM_SAVE: Error: Invalid filename after sanitization")
-            return
-        os.makedirs('game_saves', exist_ok=True)
-        save_path = os.path.join('game_saves', f"{filename}.json")
-        save_data = {
-            'game_state': game_state
-        }
+        raise ValueError("Invalid filename")
+    
+    # Ensure .json extension
+    if not filename.endswith('.json'):
+        filename += '.json'
+    
+    try:
+        os.makedirs(SAVE_GAMES_PATH, exist_ok=True)
+        save_path = os.path.join(SAVE_GAMES_PATH, filename)
+        
+        # Check for existing file
+        if os.path.exists(save_path):
+            if verbose:
+                create_log(f"CONFIRM_SAVE: Error: File {save_path} already exists")
+            raise ValueError("A save file with this name already exists")
+        
+        save_data = {'game_state': game_state}
         with open(save_path, 'w', encoding='utf-8') as f:
             json.dump(save_data, f, ensure_ascii=False, indent=4)
         if verbose:
             create_log(f"CONFIRM_SAVE: Game saved to {save_path}")
     except Exception as e:
-        create_log(f"CONFIRM_SAVE: Error in confirm_save: {str(e)}")
+        if verbose:
+            create_log(f"CONFIRM_SAVE: Error saving game: {str(e)}")
+        raise
 
 def retrieve_game_list(verbose=False):
     """Lists available game save files.
+
+    Args:
+        verbose (bool): If True, log the process.
 
     Returns:
         dict: Dictionary with save file choices or empty if none exist.
     """
     try:
-        if not os.path.exists('game_saves'):
+        if not os.path.exists(SAVE_GAMES_PATH):
+            if verbose:
+                create_log("RETRIEVE_GAME_LIST: No save directory found")
             return {"choices": [], "value": None, "visible": False}
-        save_files = [f for f in os.listdir('game_saves') if f.endswith('.json')]
-        return {"choices": save_files, "value": None, "visible": bool(save_files)}
+        
+        save_files = [f for f in os.listdir(SAVE_GAMES_PATH) if f.endswith('.json')]
         if verbose:
-            create_log(f"RETRIEVE_GAME_LIST: Found {len(save_files)} \nsave files: {save_files}")
+            create_log(f"RETRIEVE_GAME_LIST: Found {len(save_files)} save files: {save_files}")
+        return {"choices": save_files, "value": None, "visible": bool(save_files)}
     except Exception as e:
-        create_log(f"RETRIEVE_GAME_LIST: Error in trying to list saved games: {str(e)}")
+        if verbose:
+            create_log(f"RETRIEVE_GAME_LIST: Error listing saved games: {str(e)}")
         return {"choices": [], "value": None, "visible": False}
 
 def retrieve_game(selected_file, verbose=False):
@@ -518,24 +562,55 @@ def retrieve_game(selected_file, verbose=False):
 
     Args:
         selected_file (str): The name of the save file to load.
+        verbose (bool): If True, log the process.
 
     Returns:
-        game_state
+        dict: The loaded game state or initial game state if loading fails.
+
+    Raises:
+        ValueError: If selected_file is empty or invalid.
     """
-    if not selected_file:
+    if not selected_file or not selected_file.strip():
         if verbose:
-            create_log("CONFIRM_RETRIEVE: No file selected. Returning initial game state.")
-        return get_initial_game_state()
+            create_log("RETRIEVE_GAME: Error: No file selected")
+        raise ValueError("No file selected")
+    
     try:
+        if not os.path.exists(SAVE_GAMES_PATH):
+            if verbose:
+                create_log("RETRIEVE_GAME: Error: Save directory does not exist")
+            raise ValueError("No saved games found")
+        
         retrieve_path = os.path.join(SAVE_GAMES_PATH, selected_file)
+        if not os.path.exists(retrieve_path):
+            if verbose:
+                create_log(f"RETRIEVE_GAME: Error: File {retrieve_path} does not exist")
+            raise ValueError("Selected save file does not exist")
+        
         with open(retrieve_path, 'r', encoding='utf-8') as f:
             save_data = json.load(f)
-        return (
-            save_data.get('game_state')
-        )
+        
+        game_state = save_data.get('game_state')
+        if not game_state:
+            if verbose:
+                create_log("RETRIEVE_GAME: Error: No game_state in save file")
+            raise ValueError("Invalid save file: No game state found")
+        
+        if verbose:
+            create_log(f"RETRIEVE_GAME: Loaded game from {retrieve_path}")
+        return game_state
     except Exception as e:
-        create_log(f"CONFIRM_RETRIEVE: Error {str(e)} Returning initial game state.")
-        return get_initial_game_state()
+        if verbose:
+            create_log(f"RETRIEVE_GAME: Error loading game: {str(e)}")
+        raise
 
-#message = [{'role': 'assistant', 'content': 'No mundo de Arkonix, as cidades são construídas sobre as costas         de enormes criaturas chamadas Leviatãs, que vagam pelo mundo como montanhas vivas.         Eldrida é um reino de florestas eternas, liderado pela rainha Lyra, protege a natureza         e seus habitantes. Sua capital, Luminária, construída sobre o Leviatã Estrela da Manhã,         é conhecida por suas ruas iluminadas por lanternas mágicas que refletem a luz dos olhos do Leviatã.'}]
-#print(format_chat_history(message))
+def clean_temp_saves(verbose=False):
+    temp_save_path = 'temp_saves/last_session.json'
+    if os.path.exists(temp_save_path):
+        if time.time() - os.path.getmtime(temp_save_path) > 86400:  # 24 hours
+            os.remove(temp_save_path)
+            if verbose:
+                create_log("CLEAN_TEMP_SAVES: Removed old temp save")
+
+teste = get_initial_game_state(verbose=True)
+print(teste['npcs'])
