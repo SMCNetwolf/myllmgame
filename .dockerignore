@@ -1,0 +1,10 @@
+.env
+.vscode/
+__pycache__/
+.gradio/
+.venv/
+.idx/
+flask_session/
+game_saves/
+log/
+temp_saves/
