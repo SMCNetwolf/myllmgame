@@ -4,6 +4,7 @@ __pycache__/
 .gradio/
 .venv/
 .idx/
+.firebaserc
 flask_session/
 game_saves/
 log/

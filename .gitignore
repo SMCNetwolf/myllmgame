@@ -2,8 +2,9 @@
 .vscode/
 __pycache__/
 .gradio/
-.venv/
 .idx/
+.venv/
+.firebaserc
 flask_session/
 game_saves/
 log/
