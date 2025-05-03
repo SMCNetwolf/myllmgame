@@ -1,9 +1,11 @@
 .env
 .vscode/
 __pycache__/
-.gradio
-.venv
+.gradio/
+.venv/
 .idx/
-game_saves
-log
-temp_saves
+flask_session/
+game_saves/
+log/
+temp_saves/
+
