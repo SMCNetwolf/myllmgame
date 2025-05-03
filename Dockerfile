@@ -12,4 +12,6 @@ ENV FLASK_RUN_HOST=0.0.0.0
 
 EXPOSE 8080
 
+RUN apt-get update && apt-get install -y bash
+
 CMD ["/app/devserver.sh"]
