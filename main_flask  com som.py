@@ -6,14 +6,16 @@ import re
 import glob
 import time
 from copy import deepcopy
-from dotenv import dotenv_values
+from dotenv import load_dotenv
 from together import Together
 import prompts
 from create_log import verbose, create_log
 
 # Load API key from .env file
-env_vars = dotenv_values('.env')
-together_api_key = env_vars.get('TOGETHER_API_KEY')
+
+# Load environment variables from .env if it exists
+load_dotenv()
+together_api_key = os.environ.get('TOGETHER_API_KEY')
 if not together_api_key:
     raise ValueError("TOGETHER_API_KEY not found in .env file")
 client = Together(api_key=together_api_key)
