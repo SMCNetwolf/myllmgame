@@ -14,4 +14,4 @@ ENV PORT=8080
 EXPOSE 8080
 
 # Use Gunicorn as the production WSGI server
-CMD ["gunicorn", "--bind", "0.0.0.0:$PORT", "app:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "app:app"]
