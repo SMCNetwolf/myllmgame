@@ -1,7 +1,7 @@
 import os
 import datetime
 
-verbose = True
+verbose = False
 log_session = None
 
 

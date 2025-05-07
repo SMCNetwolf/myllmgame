@@ -10,7 +10,8 @@ system_prompt = """
 """
 
 prompt_template = """
-    
+    ***  Este é um resumo da história do jogo até o momento:
+
 """
 
 system_inventory_prompt = """

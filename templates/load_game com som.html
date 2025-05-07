@@ -39,17 +39,11 @@
                                     </select>
                                 </div>
                                 <button type="submit" class="btn btn-primary">Carregar</button>
-                                <a href="{{ url_for('game') }}" class="btn btn-secondary ms-2">Voltar</a>
-                                {% if session.user_id %}
-                                    <a href="{{ url_for('logout') }}" class="btn btn-danger ms-2">Sair</a>
-                                {% endif %}
+                                <a href="{{ url_for('game') }}" class="btn btn-secondary">Voltar</a>
                             </form>
                         {% else %}
                             <p>Nenhum jogo salvo encontrado.</p>
                             <a href="{{ url_for('game') }}" class="btn btn-secondary">Voltar</a>
-                            {% if session.user_id %}
-                                <a href="{{ url_for('logout') }}" class="btn btn-danger ms-2">Sair</a>
-                            {% endif %}
                         {% endif %}
                     </div>
                 </div>

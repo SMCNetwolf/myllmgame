@@ -72,6 +72,9 @@
                     <form action="/new_game" method="POST" class="d-inline-block">
                         <button type="submit" class="btn btn-warning ms-2">Iniciar Novo Jogo</button>
                     </form>
+                    {% if session.user_id %}
+                        <a href="{{ url_for('logout') }}" class="btn btn-danger ms-2">Sair</a>
+                    {% endif %}
                 </div>
             </div>
         </div>

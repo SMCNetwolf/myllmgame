@@ -13,6 +13,9 @@ from create_log import verbose, create_log
 
 # Load API key from .env file
 
+#TODO: Implement debug logger procedure to protect sensitive information like bearer key in log
+
+
 # Load environment variables from .env if it exists
 load_dotenv()
 together_api_key = os.environ.get('TOGETHER_API_KEY')
