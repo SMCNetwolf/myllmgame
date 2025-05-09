@@ -9,11 +9,12 @@ import sqlite3
 from flask import session
 from together import Together
 from copy import deepcopy
-from create_log import verbose, create_log
+from create_log import create_log
 from dotenv import load_dotenv
 import prompts
-
 from google.cloud import storage
+
+from config import VERBOSE
 
 # Load environment variables
 load_dotenv()
@@ -44,9 +45,7 @@ SAVE_GAMES_PATH = 'game_saves'
 DB_PATH = os.path.join('database', 'users.db')
 MAX_SAVE = 5  # Maximum number of saved games per user
 
-
 last_saved_history = None
-
 
 def upload_db_to_gcs(verbose=False):
     """Upload database/users.db to GCS."""
@@ -325,39 +324,14 @@ def update_game_state(game_state, verbose=False, **updates):
         #create_log(f'\nUPDATE_GAME_STATE - Final game_state: {game_state}\n')
     return game_state
 
-def old_image_generator(prompt, verbose=False):
-    try:
-        response = client.images.generate(
-            prompt=prompt,
-            model=IMAGE_MODEL,
-            width=256, #former 512  384   256
-            height=192, #former 384  288   192
-            steps=1,
-            n=1,
-            response_format="b64_json"
-        )
-        image_data = base64.b64decode(response.data[0].b64_json)
-        timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-        image_file_path = f"{IMAGE_FILE_PREFIX}_{timestamp}.png"
-        os.makedirs(os.path.dirname(image_file_path), exist_ok=True)
-        with open(image_file_path, 'wb') as f:
-            f.write(image_data)
-        if VERBOSE:
-            create_log(f"\nIMAGE_GENERATOR: Generated {image_file_path}\n")
-        return image_file_path
-    except Exception as e:
-        if VERBOSE:
-            create_log(f"Error in image_generator: {str(e)}")
-        return DEFAULT_IMAGE_FILE_PATH
-
 def image_generator(prompt, verbose=False):
     """Generate an image, save locally as same_image.png, and upload to GCS with timestamp."""
     try:
         response = client.images.generate(
             prompt=prompt,
             model=IMAGE_MODEL,
-            width=512,
-            height=384,
+            width=512, #former 512  384   256
+            height=384, #former 384  288   192
             steps=1,
             n=1,
             response_format="b64_json"

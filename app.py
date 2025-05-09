@@ -1,4 +1,3 @@
-from create_log import verbose, create_log
 import os
 import logging
 import json
@@ -8,6 +7,7 @@ import sqlite3
 from dotenv import load_dotenv
 import time
 from datetime import datetime
+
 from main_flask import (
     run_action, get_initial_game_state, save_temp_game_state, load_temp_game_state,
     format_chat_history, validate_game_state, confirm_save, retrieve_game_list,
@@ -15,6 +15,8 @@ from main_flask import (
     upload_db_to_gcs, download_db_from_gcs, 
     DEFAULT_IMAGE_FILE_PATH, DEFAULT_AUDIO_FILE_PATH, DB_PATH
 )
+from config import VERBOSE
+from create_log import create_log
 
 #TODO: demora na geração de imagem, salvar imagem com prompt junto talvez via tupla? DETECT_INVENTORY_CHANGES: Invalid JSON response
 
@@ -37,36 +39,6 @@ if not app.secret_key:
 
 # Initialize Bcrypt for password hashing
 bcrypt = Bcrypt(app)
-
-# Global verbose setting
-VERBOSE = False  # Default value
-
-def load_config():
-    """Load configuration from .env (if VERBOSE is set) or GCS."""
-    global VERBOSE
-    # Check if VERBOSE is set in environment (indicates local development or explicit override)
-    if 'VERBOSE' in os.environ:
-        VERBOSE = os.getenv('VERBOSE', 'False').lower() == 'true' #enviroment variables are strings, so we need to convert to bool
-        create_log(f"APP: Loaded VERBOSE={VERBOSE} from environment", verbose=True)
-    else:
-        # Assume production, load from GCS
-        try:
-            bucket_name = os.getenv('GCS_BUCKET_NAME')
-            config_path = 'config/config.json'
-            client = storage.Client()
-            bucket = client.bucket(bucket_name)
-            blob = bucket.blob(config_path)
-            config_data = blob.download_as_text()
-            config = json.loads(config_data)
-            VERBOSE = config.get('verbose', False)
-            create_log(f"APP: Loaded config from gs://{bucket_name}/{config_path}, verbose={VERBOSE}", verbose=True)
-        except Exception as e:
-            create_log(f"APP: Error loading config from GCS: {str(e)}", verbose=True)
-            VERBOSE = False  # Fallback to default
-            create_log(f"APP: Fell back to VERBOSE={VERBOSE} (default)", verbose=True)
-
-# Load config at startup
-load_config()
 
 def clean_old_logs(verbose=False):
     """Delete local log files from previous days, keeping the current day's log."""
@@ -277,6 +249,8 @@ def game():
                                             ambient_sound=ambient_sound,
                                             chat_history= format_chat_history([game_state['history'][-1]], game_state) if game_state['history'] else "" )) #format_chat_history(game_state['history'], game_state)  ))
     response.headers['Cache-Control'] = 'no-store'
+    #create_log(f"\n/GAME: User {username} Question: None", force_log=True)
+    #create_log(f"/GAME: User {username} Completion: None", force_log=True)
     return response
 
 @app.route("/command", methods=["POST"])
@@ -341,25 +315,28 @@ def process_command():
     
     chat_history= format_chat_history([game_state['history'][-1]], game_state) if game_state['history'] else ""  #format_chat_history(game_state['history'], game_state)  ))
     
-    # Handle AJAX request
+# Handle AJAX request
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        return jsonify({
+        response_data = {
             'output': output,
             'output_image': url_for('static', filename=image_filename),
             'ambient_sound': url_for('static', filename=ambient_sound),
             'chat_history': chat_history
-        })
+        }
+        create_log(f"/COMMAND: User {username} Question: {command}", force_log=True)
+        create_log(f"/COMMAND: User {username} Completion: {chat_history}", force_log=True)
+        return jsonify(response_data)
 
     # Fallback for non-AJAX requests
-    
+        
     response = make_response(render_template("game.html",
                                             output="",
                                             output_image=image_filename,
                                             ambient_sound=ambient_sound,
                                             chat_history= chat_history ))
     response.headers['Cache-Control'] = 'no-store'
-    create_log(f"\n/COMMAND: User {username} Question: {command}")
-    create_log(f"/COMMAND: User {username} Completion: {chat_history}")
+    create_log(f"\n/COMMAND: User {username} Question: {command}", force_log=True)
+    create_log(f"/COMMAND: User {username} Completion: {chat_history}", force_log=True)
     return response
 
 @app.route("/new_game", methods=["POST"])

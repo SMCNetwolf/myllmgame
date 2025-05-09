@@ -4,7 +4,7 @@ import logging
 from google.cloud import storage
 from google.cloud.logging_v2.handlers import CloudLoggingHandler
 import google.cloud.logging
-from app import VERBOSE  # Import global VERBOSE from app.py
+from config import VERBOSE  # Import VERBOSE from config.py
 
 # Get GCS bucket name
 GCS_BUCKET_NAME = os.environ.get("GCS_BUCKET_NAME")
@@ -35,13 +35,20 @@ file_handler = logging.FileHandler(log_filename)
 file_handler.setLevel(logging.DEBUG if VERBOSE else logging.INFO)
 logger.addHandler(file_handler)
 
-def create_log(message):
-    """Log a message to Google Cloud Logging, local file, and upload to GCS if configured."""
+def create_log(message, force_log=False):
+    """Log a message to Google Cloud Logging, local file, and upload to GCS if configured.
+    
+    Args:
+        message (str): The message to log.
+        force_log (bool): If True, log the message even if VERBOSE is False (at INFO level).
+    """
     timestamp = datetime.datetime.now()
     log_message = f"{timestamp}: {message}"
     
     # Log to Google Cloud Logging and local file
-    if VERBOSE:
+    if force_log:
+        logger.info(log_message)
+    elif VERBOSE:
         logger.debug(log_message)
     else:
         logger.info(log_message)
