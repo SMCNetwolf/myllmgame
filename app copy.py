@@ -51,7 +51,7 @@ app.config['SESSION_PERMANENT'] = True
 app.config['PERMANENT_SESSION_LIFETIME'] = 3600
 app.config['SESSION_COOKIE_SECURE'] = False
 app.config['SESSION_COOKIE_HTTPONLY'] = True
-app.config['SESSION_COOKIE_SAMESITE'] = 'Lax' # Try 'None' to allow cross-site requests
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_NAME'] = 'rpg_session'
 
 # Configure logging
@@ -349,8 +349,6 @@ def save():
                 # Store pending save data in session and redirect to overwrite selection
                 session['pending_save_filename'] = filename
                 session['pending_game_state'] = json.dumps(game_state)
-                create_log(f"ROUTE /SAVE_GAME: Stored pending game state for user: {username}, filename: {filename}", force_log=True)
-                create_log(f"ROUTE /SAVE_GAME: Session contents after storing: {dict(session.items())}", force_log=True)
                 flash(result["message"], "info")
                 if VERBOSE:
                     create_log(f"ROUTE /SAVE_GAME: Max saves reached, redirecting to overwrite for user: {username}")
@@ -447,8 +445,6 @@ def overwrite_game():
     if VERBOSE:
         create_log(f"ROUTE /OVERWRITE_GAME: User: {user_id} - {username}")
 
-    create_log(f"ROUTE /OVERWRITE_GAME: Session contents on entry: {dict(session.items())}", force_log=True)
-
     if request.method == "POST":
         selected_file = request.form.get("selected_file")
         new_filename = request.form.get("new_filename")
@@ -466,13 +462,7 @@ def overwrite_game():
             return redirect(url_for("overwrite_game"))
         
         try:
-            pending_game_state = session.get('pending_game_state')
-            if not pending_game_state:
-                flash("No pending game state found. Please save the game again.", "error")
-                create_log(f"\nROUTE /OVERWRITE_GAME: No pending game state for user: {username}\n", force_log=True)
-                return redirect(url_for("game"))
-            
-            game_state = json.loads(pending_game_state)
+            game_state = json.loads(session.get('pending_game_state'))
             if not validate_game_state(game_state):
                 flash("Invalid game state.", "error")
                 create_log(f"\nROUTE /OVERWRITE_GAME: Invalid pending game state for user: {username}\n")
@@ -517,10 +507,6 @@ def overwrite_game():
             save_temp_game_state(game_state)
             upload_db_to_gcs()
             return redirect(url_for("game"))
-        except json.JSONDecodeError as e:
-            flash("Invalid game state data.", "error")
-            create_log(f"\nROUTE /OVERWRITE_GAME: JSON decode error for user {username}: {str(e)}\n", force_log=True)
-            return redirect(url_for("game"))
         except Exception as e:
             flash(f"Failed to save game: {str(e)}", "error")
             create_log(f"\n\nROUTE /OVERWRITE_GAME: Error saving game for user {username}: {str(e)}\n\n", force_log=True)
@@ -546,4 +532,4 @@ def overwrite_game():
         max_save=MAX_SAVE
     ))
     response.headers['Cache-Control'] = 'no-store'
-    return response
+    return response   

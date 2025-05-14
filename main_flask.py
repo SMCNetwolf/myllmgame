@@ -14,70 +14,22 @@ from dotenv import load_dotenv
 import prompts
 from google.cloud import storage
 
-from config import VERBOSE
+from config import (
+    VERBOSE, GCS_BUCKET_NAME, TOGETHER_API_KEY, MODEL, IS_SAFE_MODEL, IMAGE_MODEL, 
+    INITIAL_IMAGE_FILE_PATH, DEFAULT_IMAGE_FILE_PATH, DEFAULT_AUDIO_FILE_PATH, 
+    IMAGE_FILE_PREFIX, WORLD_PATH, SAVE_GAMES_PATH, TEMP_SAVES_PATH, DB_PATH, MAX_SAVE,
+    ERROR_IMAGE_FILE_PATH, bucket
+)
 
-# Load environment variables
-load_dotenv()
-together_api_key = os.environ.get('TOGETHER_API_KEY')
+# Initialize Together API
+together_api_key = TOGETHER_API_KEY
 if not together_api_key:
-    raise ValueError("TOGETHER_API_KEY not found in .env file")
-    create_log("TOGETHER_API_KEY not found in .env file")
+    raise ValueError("TOGETHER_API_KEY not found ")
+    create_log("\n\nMAIN_FLASK: TOGETHER_API_KEY not found\n\n", force_log=True)
 client = Together(api_key=together_api_key)
-
-GCS_BUCKET_NAME = os.environ.get("GCS_BUCKET_NAME")
-if not GCS_BUCKET_NAME:
-    create_log("GCS_BUCKET_NAME not found in .env file")
-    raise ValueError("GCS_BUCKET_NAME not found in .env file")
-
-# Initialize GCS client
-storage_client = storage.Client()
-bucket = storage_client.bucket(GCS_BUCKET_NAME)
-
-# Configuration
-MODEL = "meta-llama/Llama-3-70b-chat-hf"
-IMAGE_MODEL = "black-forest-labs/FLUX.1-schnell-Free"
-INITIAL_IMAGE_FILE_PATH = os.path.join('static', 'default_image.png')
-DEFAULT_IMAGE_FILE_PATH = "static/image/output_image.png"
-DEFAULT_AUDIO_FILE_PATH = os.path.join('static/audio', 'default_audio.mp3')
-IMAGE_FILE_PREFIX = os.path.join('static/image', 'output_image')
-WORLD_PATH = os.path.join('.', 'SeuMundo_L1.json')
-SAVE_GAMES_PATH = 'game_saves'
-DB_PATH = os.path.join('database', 'users.db')
-MAX_SAVE = 5  # Maximum number of saved games per user
-
+    
+# Initialize last_saved_history
 last_saved_history = None
-
-def upload_db_to_gcs(verbose=False):
-    """Upload database/users.db to GCS."""
-    try:
-        blob = bucket.blob("database/users.db")
-        blob.upload_from_filename(DB_PATH)
-        if VERBOSE:
-            create_log(f"UPLOAD_DB_TO_GCS: Uploaded {DB_PATH} to gs://{GCS_BUCKET_NAME}/database/users.db")
-    except Exception as e:
-        create_log(f"UPLOAD_DB_TO_GCS: Error uploading database to GCS: {str(e)}")
-        raise
-
-def download_db_from_gcs(verbose=False):
-    """Download users.db from GCS to database/users.db."""
-    try:
-        blob = bucket.blob("database/users.db")
-        if blob.exists():
-            os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-            blob.download_to_filename(DB_PATH)
-            if VERBOSE:
-                create_log(f"DOWNLOAD_DB_FROM_GCS: Downloaded gs://{GCS_BUCKET_NAME}/database/users.db to {DB_PATH}")
-        else:
-            if VERBOSE:
-                create_log(f"DOWNLOAD_DB_FROM_GCS: No users.db found in GCS bucket {GCS_BUCKET_NAME}")
-    except Exception as e:
-        create_log(f"DOWNLOAD_DB_FROM_GCS: Error downloading database from GCS: {str(e)}")
-        raise
-
-def get_db_connection():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
 
 def validate_world(world):
     required_keys = ['name', 'description', 'kingdoms']
@@ -100,14 +52,16 @@ def load_world(filename):
         with open(filename, 'r', encoding='utf-8') as f:
             world = json.load(f)
         validate_world(world)
-        if VERBOSE:
-            create_log(f"LOAD_WORLD: Loaded world {world['name']}")
+        create_log(f"MAIN_FLASK: LOAD_WORLD: Loaded world {world['name']}")
         return world
     except FileNotFoundError:
-        create_log(f"Error: File {filename} not found")
+        create_log(f"\n\nMAIN_FLASK: Error: File {filename} not found\n\n", force_log=True)
         raise
     except json.JSONDecodeError:
-        create_log(f"Error: Invalid JSON in {filename}")
+        create_log(f"\n\nMAIN_FLASK: Error: Invalid JSON in {filename}\n\n", force_log=True)
+        raise
+    except ValueError as e:
+        create_log(f"\n\nMAIN_FLASK: Error: {str(e)}\n\n", force_log=True)
         raise
 
 def get_world_info(game_state):
@@ -120,20 +74,17 @@ def get_world_info(game_state):
         Your Inventory: \n{game_state['inventory']}\n
     """
 
-def validate_game_state(game_state, verbose=False):
+def validate_game_state(game_state, int_verbose=False):
     required_keys = ['world', 'kingdom', 'town', 'npcs', 'character', 'inventory', 'achievements', 'output_image', 'ambient_sound', 'history']
     for key in required_keys:
         if key not in game_state:
-            if VERBOSE:
-                create_log(f"VALIDATE_GAME_STATE: Missing key {key} in world JSON")
+            create_log(f"\n\nMAIN_FLASK: VALIDATE_GAME_STATE: Missing key {key} in world JSON\n\n", force_log=True)
             return False
-    if VERBOSE:
-        create_log(f"VALIDATE_GAME_STATE: Game state is valid")
+    if int_verbose:
+        create_log(f"MAIN_FLASK: VALIDATE_GAME_STATE: Game state is valid")
     return True
 
-def get_initial_game_state(verbose=False):
-    if VERBOSE:
-        create_log("GET_INITIAL_GAME_STATE: Creating initial game state")
+def get_initial_game_state(int_verbose=False):
     
     initial_history_text = f"No mundo de Arkonix, as cidades são construídas sobre as costas \
         de enormes criaturas chamadas Leviatãs, que vagam pelo mundo como montanhas vivas. \
@@ -171,31 +122,9 @@ def get_initial_game_state(verbose=False):
         "ambient_sound": DEFAULT_AUDIO_FILE_PATH,
         "history": [{"role": "assistant", "content": initial_history_text}]
     }
-    if VERBOSE:
-        create_log(f"GET_INITIAL_GAME_STATE: Successfully created initial game state")
+    if int_verbose:
+        create_log(f"MAIN_FLASK: GET_INITIAL_GAME_STATE: Successfully created initial game state\n")
     return initial_game_state
-
-def load_temp_game_state(verbose=False):
-    temp_save_path = 'temp_saves/last_session.json'
-    try:
-        if os.path.exists(temp_save_path):
-            with open(temp_save_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                game_state = data.get('game_state')
-                if validate_game_state(game_state):
-                    if VERBOSE:
-                        create_log(f"LOAD_TEMP_GAME_STATE: Loaded game state from {temp_save_path}")
-                    return game_state
-                else:
-                    if VERBOSE:
-                        create_log(f"LOAD_TEMP_GAME_STATE: Invalid game state in {temp_save_path}")
-        else:
-            if VERBOSE:
-                create_log(f"LOAD_TEMP_GAME_STATE: No temp save file found at {temp_save_path}")
-    except Exception as e:
-        if VERBOSE:
-            create_log(f"LOAD_TEMP_GAME_STATE: Error loading temp game state: {str(e)}")
-    return None
 
 def format_chat_history(history, game_state):
     character_name = game_state['character'].split()[0]
@@ -214,31 +143,30 @@ def is_safe(message):
             raise ValueError("everyone_content_policy or get_is_safe_prompt not defined in prompts")
         prompt = prompts.get_is_safe_prompt(prompts.everyone_content_policy)
         response = client.completions.create(
-            model="Meta-Llama/LlamaGuard-2-8b",
+            model=IS_SAFE_MODEL,
             prompt=prompt.format(message=message)
         )
         result = response.choices[0].text.strip()
         return result == 'safe'
     except Exception as e:
-        create_log(f"Error in is_safe: {str(e)}")
+        create_log(f"\n\nMAIN_FLASK: Error in is_safe: {str(e)}\n\n", force_log=True)
         return False
 
-def summarize(template, prompt, verbose=False):
+def summarize(template, prompt, int_verbose=False):
     try:
         final_prompt = template + prompt
         response = client.chat.completions.create(
             model=MODEL,
             messages=[{"role": "user", "content": final_prompt}]
         )
-        if VERBOSE:
-            create_log(f"\nSUMMARIZE - Summarized text: \n{response.choices[0].message.content}\n\n")
+        if int_verbose:
+            create_log(f"\nMAIN_FLASK: SUMMARIZE - Summarized text: \n{response.choices[0].message.content}\n")
         return response.choices[0].message.content
     except Exception as e:
-        create_log(f"Error in summarize: {str(e)}")
+        create_log(f"\n\nMAIN_FLASK: Error in summarize: {str(e)}\n\n", force_log=True)
         return ""
 
-def detect_inventory_changes(game_state, last_response, verbose=False):
-    int_verbose = False #verbose
+def detect_inventory_changes(game_state, last_response, int_verbose=False):
     try:
         inventory = game_state['inventory']
         messages = [
@@ -253,78 +181,70 @@ def detect_inventory_changes(game_state, last_response, verbose=False):
         )
         response = chat_completion.choices[0].message.content
         if int_verbose:
-            create_log(f'\nDETECT_INVENTORY_CHANGES: Response:\n{response}\n')
+            create_log(f'\nMAIN_FLASK: DETECT_INVENTORY_CHANGES: Response:\n{response}\n')
         try:
             result = json.loads(response)
             return result.get('itemUpdates', [])
         except json.JSONDecodeError:
-            create_log("DETECT_INVENTORY_CHANGES: Invalid JSON response")
+            create_log("\n\nMAIN_FLASK: DETECT_INVENTORY_CHANGES: Invalid JSON response\n\n", force_log=True)
             return []
     except Exception as e:
-        create_log(f"Error in detect_inventory_changes: {str(e)}")
+        create_log(f"\n\nMAIN_FLASK: DETECT_INVENTORY_CHANGES: Error in detect_inventory_changes: {str(e)}\n\n", force_log=True)
         return []
 
-def update_inventory(game_state, item_updates, verbose=False):
-    int_verbose = False #verbose
+def update_inventory(game_state, item_updates, int_verbose=False):
     if 'inventory' not in game_state:
-        if int_verbose:
-            create_log('\nUPDATE_INVENTORY - Error: game_state missing inventory key\n')
+        create_log('\n\nMAIN_FLASK: UPDATE_INVENTORY - Error: game_state missing inventory key\n\n', force_log=True)
         return
     inventory = game_state['inventory']
     if isinstance(item_updates, dict):
         item_updates = [item_updates]
     elif not isinstance(item_updates, list):
-        if int_verbose:
-            create_log(f'\nUPDATE_INVENTORY - Error: item_updates must be list or dict, got {type(item_updates)}\n')
+        create_log(f'\n\nMAIN_FLASK: UPDATE_INVENTORY - Error: item_updates must be list or dict, got {type(item_updates)}\n\n', force_log=True)
         return
     if int_verbose:
-        create_log(f'\nUPDATE_INVENTORY - Initial Inventory: {inventory}\n')
-        create_log(f'\nUPDATE_INVENTORY - Item Updates: {item_updates}\n')
+        create_log(f'\nMAIN_FLASK: UPDATE_INVENTORY - Initial Inventory: {inventory}\n')
+        create_log(f'\nMAIN_FLASK: UPDATE_INVENTORY - Item Updates: {item_updates}\n')
     if not item_updates:
         if int_verbose:
             create_log('\nUPDATE_INVENTORY - No updates provided\n')
         return
     for update in item_updates:
         if not isinstance(update, dict) or 'name' not in update or 'change_amount' not in update:
-            if int_verbose:
-                create_log(f'\nUPDATE_INVENTORY - Invalid update: {update}\n')
+            create_log(f'\n\nMAIN_FLASK: UPDATE_INVENTORY - Invalid update: {update}\n\n')
             continue
         name = update['name']
         change_amount = update['change_amount']
         if not isinstance(change_amount, int):
             if int_verbose:
-                create_log(f'\nUPDATE_INVENTORY - Invalid change_amount: {update}\n')
+                create_log(f'\n\nMAIN_FLASK: UPDATE_INVENTORY - Invalid change_amount: {update}\n\n')
             continue
         if change_amount == 0:
             continue
         elif change_amount > 0:
             inventory[name] = inventory.get(name, 0) + change_amount
             if int_verbose:
-                create_log(f'\nUPDATE_INVENTORY - Added {change_amount} {name}\n')
+                create_log(f'MAIN_FLASK: UPDATE_INVENTORY - Added {change_amount} {name}')
         elif change_amount < 0 and name in inventory:
             inventory[name] += change_amount
             if int_verbose:
-                create_log(f'\nUPDATE_INVENTORY - Removed {abs(change_amount)} {name}\n')
+                create_log(f'MAIN_FLASK: UPDATE_INVENTORY - Removed {abs(change_amount)} {name}')
         if name in inventory and inventory[name] <= 0:
             del inventory[name]
             if int_verbose:
-                create_log(f'\nUPDATE_INVENTORY - Removed {name} (quantity <= 0)\n')
+                create_log(f'MAIN_FLASK: UPDATE_INVENTORY - Removed {name} (quantity <= 0)')
     if int_verbose:
-        create_log(f'\nUPDATE_INVENTORY - Final Inventory: {inventory}\n')
-    update_game_state(game_state, inventory=inventory, verbose=VERBOSE)
+        create_log(f'MAIN_FLASK: UPDATE_INVENTORY - Final Inventory: {inventory}\n')
+    update_game_state(game_state, inventory=inventory)
 
-def update_game_state(game_state, verbose=False, **updates):
-    if VERBOSE:
-        create_log(f'\nUPDATE_GAME_STATE - Updating game_state\n')
-        #create_log(f'\nUPDATE_GAME_STATE - Initial game_state: {game_state}\n')
-        #create_log(f'\nUPDATE_GAME_STATE - Updates: {updates}\n')
+def update_game_state(game_state, **updates):
     game_state.update(updates)
     if VERBOSE:
-        create_log(f'\nUPDATE_GAME_STATE - Updated game_state\n')
-        #create_log(f'\nUPDATE_GAME_STATE - Final game_state: {game_state}\n')
+        create_log(f'MAIN_FLASK: UPDATE_GAME_STATE - Updated game_state')
+        #create_log(f'\nMAIN_FLASK: UPDATE_GAME_STATE - Final game_state:\n{game_state}\n')
     return game_state
 
-def image_generator(prompt, verbose=False):
+def image_generator(prompt, int_verbose=False):
     """Generate an image, save locally as same_image.png, and upload to GCS with timestamp."""
     try:
         response = client.images.generate(
@@ -346,46 +266,40 @@ def image_generator(prompt, verbose=False):
         # Upload image to GCS with timestamp
         timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
         gcs_path = f"{DEFAULT_IMAGE_FILE_PATH.split('.png')[0]}_{timestamp}.png"
+
         try:
             blob = bucket.blob(gcs_path)
             blob.upload_from_filename(DEFAULT_IMAGE_FILE_PATH)
-            if VERBOSE:
-                create_log(f"IMAGE_GENERATOR: Uploaded {DEFAULT_IMAGE_FILE_PATH} to gs://{os.environ.get('GCS_BUCKET_NAME')}/{gcs_path}")
+            create_log(f"MAIN_FLASK: IMAGE_GENERATOR: Uploaded {DEFAULT_IMAGE_FILE_PATH} to gs://{os.environ.get('GCS_BUCKET_NAME')}/{gcs_path}", force_log=True)
         except Exception as e:
-            create_log(f"IMAGE_GENERATOR: Error uploading {DEFAULT_IMAGE_FILE_PATH} to GCS: {str(e)}")
+            create_log(f"\n\nMAIN_FLASK: IMAGE_GENERATOR: Error uploading {DEFAULT_IMAGE_FILE_PATH} to GCS: {str(e)}\n\n", force_log=True)
             raise
         
-        if VERBOSE:
-            create_log(f"IMAGE_GENERATOR: Generated and saved {DEFAULT_IMAGE_FILE_PATH}")
+        if int_verbose:
+            create_log(f"MAIN_FLASK: IMAGE_GENERATOR: Generated and saved {DEFAULT_IMAGE_FILE_PATH}")
         return DEFAULT_IMAGE_FILE_PATH
     except Exception as e:
-        if VERBOSE:
-            create_log(f"IMAGE_GENERATOR: Error generating image: {str(e)}")
-        return DEFAULT_IMAGE_FILE_PATH
+        create_log(f"\n\nMAIN_FLASK: IMAGE_GENERATOR: Error generating image: {str(e)}\n\n", force_log=True)
+        return ERROR_IMAGE_FILE_PATH
 
-def run_action(message, game_state, verbose=False):
+def run_action(message, game_state, int_verbose=False):
     try:
-        '''
-        if VERBOSE:
-            create_log(f"\nRUN_ACTION - Initial game_state: \n{game_state}\n")
-            create_log(f"\nRUN_ACTION - Initial history: \n{game_state['history']}\n")
-        '''
         world_info = get_world_info(game_state)
         summ_history = ""
         str_history = " ".join([str(message['content']) for message in game_state['history']])
-        if len(str_history) > 600:
-            summ_history = summarize(prompts.summarize_prompt_template, str_history)
-            if VERBOSE:
-                create_log(f"\nRUN_ACTION - Summarized history: \n{summ_history}\n")
+        if len(str_history) > 6000: # 6000 char is about a thousand words
+            summ_history = summarize(prompts.summarize_prompt_template, str_history,int_verbose=int_verbose)
+            if int_verbose:
+                create_log(f"MAIN_FLASK: RUN_ACTION - Summarized history: \n{summ_history}\n")
         else:
             summ_history = str_history
-            if VERBOSE:
-                create_log("RUN_ACTION - History not summarized")
-        message_prompt = prompts.prompt_template + f"n{summ_history}\n" + \
-            f"*** Pergunta do usuário: \n{game_state['inventory']}\n" + \
-            f"*** Pergunta do usuário: \n{message}\n\n"
-        if VERBOSE:
-            create_log(f"\nRUN_ACTION - Message prompt: \n{message_prompt}\n")
+            if int_verbose:
+                create_log(f"MAIN_FLASK: RUN_ACTION - History not summarized")
+        message_prompt = prompts.prompt_template + f"\n{summ_history}\n" + \
+            f"\n*** Inventário do usuário: \n{game_state['inventory']}\n" + \
+            f"\n*** Pergunta do usuário: \n{message}\n\n"
+        if int_verbose:
+            create_log(f"MAIN_FLASK: RUN_ACTION - Message prompt: \n{message_prompt}\n")
         local_messages = [
             {"role": "system", "content": prompts.system_prompt},
             {"role": "assistant", "content": world_info},
@@ -397,30 +311,22 @@ def run_action(message, game_state, verbose=False):
             messages=local_messages
         )
         result = response.choices[0].message.content
-       #create_log(f"\nRUN_ACTION - Question: {message}\n")
-        #create_log(f"\nRUN_ACTION - Assistant response: \n{result}\n")
-        generated_image_path = image_generator(result, verbose=VERBOSE)
+        generated_image_path = image_generator(result, int_verbose=int_verbose)
         local_messages.append({"role": "assistant", "content": result})
-        item_updates = detect_inventory_changes(game_state, result, verbose=VERBOSE)
-        update_inventory(game_state, item_updates, verbose=VERBOSE)
+        item_updates = detect_inventory_changes(game_state, result, int_verbose=int_verbose)
+        update_inventory(game_state, item_updates, int_verbose=int_verbose)
         updated_history = game_state['history'] + [{"role": "user", "content": message}, {"role": "assistant", "content": result}]
         update_game_state(
             game_state,
             output_image=generated_image_path,
             history=updated_history,
-            verbose=VERBOSE
         )
-        '''
-        if VERBOSE:
-            create_log(f"\nRUN_ACTION - Question: {message}\n")
-            create_log(f"\nRUN_ACTION - Final game_state: \n{game_state}\n")
-        '''
         return result
     except Exception as e:
-        create_log(f"Error in run_action: {str(e)}")
+        create_log(f"\n\nMAIN_FLASK: Error in run_action: {str(e)}\n\n", force_log=True)
         return "Error in run_action - Something went wrong."
 
-def save_temp_game_state(game_state, verbose=False):
+def save_temp_game_state(game_state, int_verbose=False):
     global last_saved_history
     if last_saved_history != game_state['history']:
         try:
@@ -429,143 +335,8 @@ def save_temp_game_state(game_state, verbose=False):
             with open(temp_save_path, 'w', encoding='utf-8') as f:
                 json.dump({'game_state': game_state}, f, ensure_ascii=False, indent=4)
             last_saved_history = game_state['history']
-            if VERBOSE:
-                create_log(f"SAVE_TEMP_GAME_STATE: Saved game state to {temp_save_path}")
+            if int_verbose:
+                create_log(f"MAIN_FLASK: SAVE_TEMP_GAME_STATE: Saved game state to {temp_save_path}")
         except Exception as e:
-            create_log(f"SAVE_TEMP_GAME_STATE: Error saving temp game state: {str(e)}")
-
-def old_confirm_save(filename, game_state, user_id, verbose=False):
-    if not filename or not filename.strip():
-        if VERBOSE:
-            create_log("CONFIRM_SAVE: Error: Empty filename")
-        raise ValueError("Filename cannot be empty")
-    
-    filename = re.sub(r'[^\w\-]', '', filename.strip())
-    if not filename:
-        if VERBOSE:
-            create_log("CONFIRM_SAVE: Error: Invalid filename after sanitization")
-        raise ValueError("Invalid filename")
-    
-    if not os.path.exists(DB_PATH):
-        if VERBOSE:
-            create_log(f"CONFIRM_SAVE: Error: Database file {DB_PATH} does not exist")
-        raise ValueError(f"Database file {DB_PATH} does not exist")
-
-    try:
-        with get_db_connection() as conn:
-            c = conn.cursor()
-            # Count existing saves (excluding autosave)
-            c.execute("SELECT COUNT(*) FROM game_states WHERE user_id = ? AND game_name != 'autosave'", (user_id,))
-            save_count = c.fetchone()[0]
-            
-            # Check if save limit is reached
-            if save_count >= MAX_SAVE:
-                if VERBOSE:
-                    create_log(f"CONFIRM_SAVE: Error: Maximum save limit ({MAX_SAVE}) reached for user {user_id}")
-                raise ValueError(f"Cannot save game: Maximum of {MAX_SAVE} saved games allowed.")
-            
-            # Save the game (INSERT OR REPLACE to overwrite if the filename exists)
-            c.execute("INSERT OR REPLACE INTO game_states (user_id, game_name, game_state, created_at) VALUES (?, ?, ?, ?)",
-                      (user_id, filename, json.dumps(game_state), time.strftime('%Y-%m-%d %H:%M:%S')))
-            conn.commit()
-            if VERBOSE:
-                create_log(f"CONFIRM_SAVE: Game saved (or overwritten) for user {user_id} as {filename}")
-    except Exception as e:
-        if VERBOSE:
-            create_log(f"CONFIRM_SAVE: Error saving game: {str(e)}")
-        raise  # Re-raise the exception to propagate it to the caller
-
-def confirm_save(filename, game_state, user_id, verbose=False):
-    if not filename or not filename.strip():
-        if VERBOSE:
-            create_log("CONFIRM_SAVE: Error: Empty filename")
-        raise ValueError("Filename cannot be empty")
-    
-    filename = re.sub(r'[^\w\-]', '', filename.strip())
-    if not filename:
-        if VERBOSE:
-            create_log("CONFIRM_SAVE: Error: Invalid filename after sanitization")
-        raise ValueError("Invalid filename")
-    
-    if not os.path.exists(DB_PATH):
-        if VERBOSE:
-            create_log(f"CONFIRM_SAVE: Error: Database file {DB_PATH} does not exist")
-        raise ValueError(f"Database file {DB_PATH} does not exist")
-    
-    try:
-        with get_db_connection() as conn:
-            c = conn.cursor()
-            c.execute("SELECT COUNT(*) FROM game_states WHERE user_id = ? AND game_name != 'autosave'", (user_id,))
-            save_count = c.fetchone()[0]
-            
-            if save_count >= MAX_SAVE:
-                if VERBOSE:
-                    create_log(f"CONFIRM_SAVE: Error: Maximum save limit ({MAX_SAVE}) reached for user {user_id}")
-                raise ValueError(f"Cannot save game: Maximum of {MAX_SAVE} saved games allowed.")
-            
-            c.execute("INSERT OR REPLACE INTO game_states (user_id, game_name, game_state, created_at) VALUES (?, ?, ?, ?)",
-                      (user_id, filename, json.dumps(game_state), time.strftime('%Y-%m-%d %H:%M:%S')))
-            conn.commit()
-            if VERBOSE:
-                create_log(f"CONFIRM_SAVE: Game saved (or overwritten) for user {user_id} as {filename}")
-        
-        # Upload database to GCS
-        upload_db_to_gcs(verbose=VERBOSE)
-        if VERBOSE:
-            create_log("CONFIRM_SAVE: Database uploaded to GCS")
-    except Exception as e:
-        create_log(f"CONFIRM_SAVE: Error saving game: {str(e)}")
-        raise
-
-def retrieve_game_list(user_id, verbose=False):
-    try:
-        with get_db_connection() as conn:
-            c = conn.cursor()
-            c.execute("SELECT game_name FROM game_states WHERE user_id = ?", (user_id,))
-            save_files = [row['game_name'] for row in c.fetchall()]
-            if VERBOSE:
-                create_log(f"RETRIEVE_GAME_LIST: Found {len(save_files)} save files for user {user_id}: {save_files}")
-            return {"choices": save_files, "value": None, "visible": bool(save_files)}
-    except Exception as e:
-        if VERBOSE:
-            create_log(f"RETRIEVE_GAME_LIST: Error listing saved games: {str(e)}")
-        return {"choices": [], "value": None, "visible": False}
-
-def retrieve_game(selected_file, user_id, verbose=False):
-    if not selected_file or not selected_file.strip():
-        if VERBOSE:
-            create_log("RETRIEVE_GAME: Error: No file selected")
-        raise ValueError("No file selected")
-    
-    try:
-        with get_db_connection() as conn:
-            c = conn.cursor()
-            c.execute("SELECT game_state FROM game_states WHERE user_id = ? AND game_name = ?", (user_id, selected_file))
-            row = c.fetchone()
-            if not row:
-                if VERBOSE:
-                    create_log(f"RETRIEVE_GAME: Error: Game {selected_file} not found for user {user_id}")
-                raise ValueError("Selected save file does not exist")
-            
-            game_state = json.loads(row['game_state'])
-            if not validate_game_state(game_state, verbose=VERBOSE):
-                if VERBOSE:
-                    create_log("RETRIEVE_GAME: Error: Invalid game state")
-                raise ValueError("Invalid save file: No game state found")
-            
-            if VERBOSE:
-                create_log(f"RETRIEVE_GAME: Loaded game {selected_file} for user {user_id}")
-            return game_state
-    except Exception as e:
-        if VERBOSE:
-            create_log(f"RETRIEVE_GAME: Error loading game: {str(e)}")
-        raise
-
-def clean_temp_saves(verbose=False, force=False):
-    temp_save_path = 'temp_saves/last_session.json'
-    if os.path.exists(temp_save_path):
-        if force or time.time() - os.path.getmtime(temp_save_path) > 86400:
-            os.remove(temp_save_path)
-            if VERBOSE:
-                create_log("CLEAN_TEMP_SAVES: Removed temp save")
-                
+            create_log(f"\n\nMAIN_FLASK: SAVE_TEMP_GAME_STATE: Error saving temp game state: {str(e)}\n\n", force_log=True)
+              

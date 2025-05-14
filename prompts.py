@@ -50,7 +50,7 @@ summarize_prompt_template = """
     O mestre do jogo já tem informações sobre os locais existentes no mundo, e \
     sobre o inventário disponível para o usuário. Exclua essas informações. \
     Mantenha o histórico de localização, de interações com NPCs, etc.\
-    Seu resumo deve ter 200 palavras no máximo.
+    Seu resumo deve ter 1000 palavras no máximo.
 
     HISTÓRIA DO JOGO:
 
