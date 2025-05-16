@@ -19,5 +19,5 @@ cloudbuild.yaml
 config.json
 #devserver*
 firebase.json
-*copy.txt
+requirements*copy.txt
 test_bench.py
