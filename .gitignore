@@ -12,7 +12,7 @@ texts/
 .env
 .dockerignore
 .firebaserc
-.gitignore
+#.gitignore
 *copy.py
 cloudbuild.yaml
 *copy.json
