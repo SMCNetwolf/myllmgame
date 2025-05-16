@@ -28,9 +28,9 @@ def init_db():
                 UNIQUE(user_id, game_name)
             )''')
             conn.commit()
-            create_log("INIT_DB: Database initialized successfully")
+            create_log("HANDLE_DB: INIT_DB: Database initialized successfully")
     except Exception as e:
-        create_log(f"\n\nINIT_DB: Error initializing database: {e}\n\n")
+        create_log(f"\n\nHANDLE_DB: INIT_DB: Error initializing database: {e}\n\n")
         raise  # Re-raise the exception to stop the app if initialization fails
 
 def upload_db_to_gcs():
@@ -40,9 +40,9 @@ def upload_db_to_gcs():
             blob = bucket.blob(DB_PATH)
             blob.upload_from_filename(DB_PATH)
             if VERBOSE:
-                create_log(f"UPLOAD_DB_TO_GCS: Uploaded {DB_PATH} to gs://{GCS_BUCKET_NAME}/{DB_PATH}")
+                create_log(f"HANDLE_DB: UPLOAD_DB_TO_GCS: Uploaded {DB_PATH} to gs://{GCS_BUCKET_NAME}/{DB_PATH}")
         except Exception as e:
-            create_log(f"\n\nUPLOAD_DB_TO_GCS: Error uploading database to GCS: {str(e)}\n\n", force_log=True)
+            create_log(f"\n\nHANDLE_DB: UPLOAD_DB_TO_GCS: Error uploading database to GCS: {str(e)}\n\n", force_log=True)
             #TODO: Decide whether to raise or handle the error
 
 def download_db_from_gcs():
@@ -53,21 +53,21 @@ def download_db_from_gcs():
             if blob.exists():
                 os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
                 blob.download_to_filename(DB_PATH)
-                print(f"DOWNLOAD_DB_FROM_GCS: Downloaded gs://{GCS_BUCKET_NAME}/{DB_PATH} to {DB_PATH}")
+                print(f"HANDLE_DB: DOWNLOAD_DB_FROM_GCS: Downloaded gs://{GCS_BUCKET_NAME}/{DB_PATH} to {DB_PATH}")
                 if VERBOSE:
-                    create_log(f"DOWNLOAD_DB_FROM_GCS: Downloaded gs://{GCS_BUCKET_NAME}/{DB_PATH} to {DB_PATH}")
+                    create_log(f"HANDLE_DB: DOWNLOAD_DB_FROM_GCS: Downloaded gs://{GCS_BUCKET_NAME}/{DB_PATH} to {DB_PATH}")
             else:
                 if VERBOSE:
-                    create_log(f"\n\nDOWNLOAD_DB_FROM_GCS: No users.db found in GCS bucket {GCS_BUCKET_NAME}\n\n")
+                    create_log(f"\n\nHANDLE_DB: DOWNLOAD_DB_FROM_GCS: No users.db found in GCS bucket {GCS_BUCKET_NAME}\n\n")
         except Exception as e:
-            create_log(f"\n\nDOWNLOAD_DB_FROM_GCS: Error downloading database from GCS: {str(e)}\n\n", force_log=True)
+            create_log(f"\n\nHANDLE_DB: DOWNLOAD_DB_FROM_GCS: Error downloading database from GCS: {str(e)}\n\n", force_log=True)
             #TODO: Decide whether to raise or handle the error
 
 def get_db_connection():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     if VERBOSE:
-        create_log(f"GET_DB_CONNECTION: Connected to database {DB_PATH}")
+        create_log(f"HANDLE_DB: GET_DB_CONNECTION: Connected to database {DB_PATH}")
     return conn
 
 def confirm_save(filename, game_state, user_id):

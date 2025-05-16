@@ -14,7 +14,8 @@ from config import (
 )
 from main_flask import (
     run_action, get_initial_game_state, save_temp_game_state,
-    format_chat_history, validate_game_state, last_saved_history
+    format_chat_history, validate_game_state, last_saved_history,
+    clean_duplicate_history
 )
 from create_log import create_log, clean_old_logs
 
@@ -222,6 +223,9 @@ def process_command():
             if VERBOSE:
                 create_log("ROUTE /COMMAND: No autosave, initialized new")
 
+    # Clean history to remove duplicates while preserving order
+    clean_duplicate_history(game_state, int_verbose=VERBOSE)
+    
     output = run_action(command, game_state)
     timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
     gcs_path = f"{DEFAULT_IMAGE_FILE_PATH.split('.png')[0]}_{timestamp}.png"
@@ -244,17 +248,19 @@ def process_command():
     raw_image_path = game_state['output_image']
     image_filename = get_relative_image_path(raw_image_path)
 
-    chat_history= format_chat_history([game_state['history'][-1]], game_state) if game_state['history'] else ""  #format_chat_history(game_state['history'], game_state)  ))
+    # Format only the latest interaction (last two history entries: user command and assistant response)
+    latest_interaction = game_state['history'][-2:] if len(game_state['history']) >= 2 else game_state['history']
+    chat_history = format_chat_history(latest_interaction, game_state) if game_state['history'] else ""
 
     # Handle AJAX request
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         response_data = {
-            'output': output,
+            'output': "",  # Set output to empty to avoid rendering directly
             'output_image': url_for('static', filename=image_filename),
             'ambient_sound': url_for('static', filename=ambient_sound),
             'chat_history': chat_history
         }
-        create_log(f"\nROUTE /COMMAND-AJAX: User {username} \nQuestion: {command}", force_log=True)
+        create_log(f"\nROUTE /COMMAND-AJAX: User {username}\n\nQuestion: {command}", force_log=True)
         create_log(f"ROUTE /COMMAND-AJAX: Generated image: {gcs_path}", force_log=True)
         create_log(f"ROUTE /COMMAND-AJAX: Completion: {chat_history}\n", force_log=True)
         return jsonify(response_data)
@@ -262,12 +268,12 @@ def process_command():
     # Fallback for non-AJAX requests
         
     response = make_response(render_template("game.html",
-                                            output="",
+                                            output="",  # Set output to empty to avoid rendering directly
                                             output_image=image_filename,
                                             ambient_sound=ambient_sound,
                                             chat_history= chat_history ))
     response.headers['Cache-Control'] = 'no-store'
-    create_log(f"\nROUTE /COMMAND: User {username} \nQuestion: {command}", force_log=True)
+    create_log(f"\nROUTE /COMMAND: User {username}\n\nQuestion: {command}", force_log=True)
     create_log(f"ROUTE /COMMAND: Generated image: {gcs_path}", force_log=True)
     create_log(f"ROUTE /COMMAND: Completion: {chat_history}\n", force_log=True)
     return response
@@ -392,6 +398,10 @@ def load():
             if not validate_game_state(game_state):
                 create_log(f"\n\nROUTE /RETRIEVE_GAME: Loaded game state is invalid for user: {username}\n\n")
                 raise ValueError("Loaded game state is invalid")
+
+            # Clean history to remove duplicates while preserving order
+            clean_duplicate_history(game_state, int_verbose=VERBOSE)
+
             flash("Game loaded successfully!", "success")
             if VERBOSE:
                 create_log(f"ROUTE /RETRIEVE_GAME: Game {selected_file} loaded for user: {username}")
@@ -402,7 +412,7 @@ def load():
                           (user_id, "autosave", json.dumps(game_state), time.strftime('%Y-%m-%d %H:%M:%S')))
                 conn.commit()
                 if VERBOSE:
-                    create_log("\nROUTE /RETRIEVE_GAME: Overwrote autosave with loaded game state\n")
+                    create_log("ROUTE /RETRIEVE_GAME: Overwrote autosave with loaded game state")
 
             raw_image_path = game_state['output_image']
             image_filename = get_relative_image_path(raw_image_path)
@@ -412,7 +422,7 @@ def load():
                                                     output="Game loaded!",
                                                     output_image=image_filename,
                                                     ambient_sound=ambient_sound,
-                                                    chat_history= format_chat_history([game_state['history'][-1]], game_state) if game_state['history'] else "" )) #format_chat_history(game_state['history'], game_state)  ))
+                                                    chat_history= format_chat_history(game_state['history'], game_state) if game_state['history'] else "" )) # gets the whole history
             response.headers['Cache-Control'] = 'no-store'
             return response
         except ValueError as ve:
