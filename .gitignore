@@ -1,6 +1,5 @@
 __pycache__/
 .google/
-.gradio/
 .idx/
 .venv/
 .vscode/
@@ -11,13 +10,14 @@ temp_saves/*
 templates/*copy.html
 texts/
 .env
-.firebaserc
 .dockerignore
+.firebaserc
+.gitignore
 *copy.py
 cloudbuild.yaml
+*copy.json
 config.json
 #devserver*
-example_world.txt
 firebase.json
-main_gradio.py
+*copy.txt
 test_bench.py
