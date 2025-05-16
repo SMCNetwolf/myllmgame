@@ -10,7 +10,7 @@ temp_saves/*
 templates/*copy.html
 texts/
 .env
-.dockerignore
+#.dockerignore
 .firebaserc
 .gitignore
 *copy.py
@@ -19,6 +19,6 @@ cloudbuild.yaml
 config.json
 devserver*
 firebase.json
-*copy.txt
+requirements*copy.txt
 test_bench.py
 
