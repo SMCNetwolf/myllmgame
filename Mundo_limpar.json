@@ -1,0 +1,288 @@
+{
+    "name": "Arkonix",
+    "description": "Em Arkonix, as cidades são construídas sobre as costas de enormes criaturas chamadas Leviatãs, que vagam pelo mundo como montanhas vivas. Essas criaturas gigantes, com escamas grossas como montanhas e olhos que brilham como estrelas, são consideradas sagradas pelos  habitantes de Arkonix, que aprenderam a viver em harmonia com elas. As cidades são construídas com madeira e pedra, e são conectadas por pontes e cordas, criando uma rede complexa de ruas e edifícios que se movem ao ritmo dos Leviatãs.",
+    "kingdoms": {
+        "Eldrida": {
+            "name": "Eldrida",
+            "description": "Eldrida é um reino de florestas eternas, onde a luz do sol é filtrada pelas folhas das árvores, criando um ambiente mágico e tranquilo. O reino é liderado pela rainha Lyra, uma sábia e justa governante que protege a natureza e seus habitantes. A cultura de Eldrida é baseada na harmonia com a natureza, e seus habitantes são habilidosos em magia e artesanato. A história do reino remonta à época em que os primeiros habitantes descobriram a fonte de vida da floresta, uma árvore sagrada que concede poderes mágicos a quem a protege.",
+            "world": "Arkonix",
+            "towns": {
+                "Luminaria": {
+                    "name": "Luminaria",
+                    "description": "Luminaria é uma cidade construída sobre o Leviatã mais antigo e sábio de Arkonix, chamado Estrela da Manhã. Localizada no coração do reino de Eldrida, a cidade é conhecida por suas ruas iluminadas por lanternas mágicas que refletem a luz dos olhos do Leviatã. O lugar mais importante da cidade é o Templo da Estrela, onde os sacerdotes realizam rituais para manter a harmonia entre os habitantes e o Leviatã. Segundo a lenda, o fundador da cidade, um grande mago, fez um pacto com Estrela da Manhã para proteger a cidade em troca de conhecimento e sabedoria.",
+                    "world": "Arkonix",
+                    "kingdom": "Eldrida",
+                    "npcs": {
+                        "Eira Shadowglow": {
+                            "name": "Eira Shadowglow",
+                            "description": "Eira é uma jovem maga de Eldrida, com longos cabelos negros e olhos verdes brilhantes. Ela é habilidosa em magia de sombra e ilusão, e é conhecida por sua habilidade em se esgueirar pelas sombras e desaparecer em plena luz do dia. Eira é uma aventureira solitária, em busca de segredos perdidos e conhecimento proibido. Sua dor mais profunda é a perda de sua família em uma guerra contra os inimigos de Eldrida, e seu desejo mais profundo é descobrir a verdade sobre sua família e vingar sua morte.",
+                            "world": "Arkonix",
+                            "kingdom": "Eldrida",
+                            "town": "Luminaria"
+                        },
+                        "Kael Starseeker": {
+                            "name": "Kael Starseeker",
+                            "description": "Kael é um marinheiro de Luminaria, com sexo forte e bronzeado, e olhos azuis que brilham como as estrelas. Ele é o capitão do navio mais rápido de Luminaria, e é conhecido por sua habilidade em navegar pelas rotas mais perigosas do mundo. Kael é um homem de ação, sempre procurando por desafios e aventuras. Sua dor mais profunda é a perda de seu navio e sua tripulação em uma tempestade, e seu desejo mais profundo é encontrar um novo propósito e uma nova tripulação para compartilhar suas aventuras.",
+                            "world": "Arkonix",
+                            "kingdom": "Eldrida",
+                            "town": "Luminaria"
+                        },
+                        "Lyrien Darkscale": {
+                            "name": "Lyrien Darkscale",
+                            "description": "Lyrien é um guerreiro de Arkonix, com pele escura e escamas grossas como a de um Leviatã. Ele é o líder dos guardiões do Leviatã, e é conhecido por sua habilidade em lutar contra monstros e criaturas perigosas. Lyrien é um homem sério e leal, sempre pronto a defender seu povo e seu Leviatã. Sua dor mais profunda é a dor de ver seu povo sofrendo com a falta de alimentos e recursos, e seu desejo mais profundo é encontrar uma solução para o problema e garantir a sobrevivência de seu povo.",
+                            "world": "Arkonix",
+                            "kingdom": "Eldrida",
+                            "town": "Luminaria"
+                        }
+                    }
+                },
+                "Ventaria": {
+                    "name": "Ventaria",
+                    "description": "Ventaria é uma cidade construída sobre o Leviatã mais veloz de Arkonix, chamado Vento do Norte. Localizada na costa norte do reino de Eldrida, a cidade é conhecida por suas ruas estreitas e sinuosas que se adaptam às curvas do Leviatã. O lugar mais importante da cidade é o Porto dos Ventos, onde os marinheiros e mercadores chegam com suas embarcações para comerciar e se abastecer. Segundo a lenda, o fundador da cidade, um grande navegador, fez um pacto com Vento do Norte para proteger a cidade em troca de ventos favoráveis e uma rota segura para os marinheiros.",
+                    "world": "Arkonix",
+                    "kingdom": "Eldrida",
+                    "npcs": {
+                        "Kaida Blackwood": {
+                            "name": "Kaida Blackwood",
+                            "description": "Kaida é uma habilidosa arqueira e caçadora que vive em Eldrida. Ela tem cabelos escuros e olhos verdes, e sua pele é bronzeada pela exposição ao sol nas florestas. Kaida cresceu ouvindo histórias sobre a fonte de vida da floresta e sonha em encontrar a árvore sagrada. No entanto, sua dor mais profunda é a perda de seu irmão, que desapareceu misteriosamente na floresta. Kaida deseja encontrar seu irmão e proteger a natureza de Eldrida.",
+                            "world": "Arkonix",
+                            "kingdom": "Eldrida",
+                            "town": "Ventaria"
+                        },
+                        "Thrain Stonefist": {
+                            "name": "Thrain Stonefist",
+                            "description": "Thrain é um habilidoso construtor de pontes e swungmaster que mora em Ventaria. Ele tem cabelos ruivos e braços fortes, e sua barba é longa e grisalha. Thrain é orgulhoso de sua habilidade em construir pontes que resistem ao movimento dos Leviatãs. No entanto, sua dor mais profunda é a perda de sua esposa, que caiu em uma das pontes durante uma tempestade. Thrain deseja construir a ponte mais segura do mundo para honrar a memória de sua esposa.",
+                            "world": "Arkonix",
+                            "kingdom": "Eldrida",
+                            "town": "Ventaria"
+                        },
+                        "Lyrien Moonwhisper": {
+                            "name": "Lyrien Moonwhisper",
+                            "description": "Lyrien é um jovem e talentoso mago que vive em Arkonix. Ele tem cabelos prateados e olhos brilhantes, e sua voz é suave e calma. Lyrien cresceu estudando os Leviatãs e sonha em descobrir o segredo de sua magia. No entanto, sua dor mais profunda é a pressão de viver à altura das expectativas de seus pais, que são importantes líderes em Arkonix. Lyrien deseja encontrar sua própria identidade e contribuir para o futuro de seu mundo.",
+                            "world": "Arkonix",
+                            "kingdom": "Eldrida",
+                            "town": "Ventaria"
+                        }
+                    }
+                },
+                "Terraverde": {
+                    "name": "Terraverde",
+                    "description": "Terraverde é uma cidade construída sobre o Leviatã mais fértil de Arkonix, chamado Terra Mãe. Localizada no sul do reino de Eldrida, a cidade é conhecida por suas ruas verdes e jardins luxuriantes que se adaptam às curvas do Leviatã. O lugar mais importante da cidade é o Jardim da Terra, onde os habitantes cultivam plantas e ervas mágicas para uso medicinal e culinário. Segundo a lenda, o fundador da cidade, uma grande druidesa, fez um pacto com Terra Mãe para proteger a cidade em troca de fertilidade e abundôncia.",
+                    "world": "Arkonix",
+                    "kingdom": "Eldrida",
+                    "npcs": {
+                        "Aria Flynn": {
+                            "name": "Aria Flynn",
+                            "description": "Aria é uma jovem druidesa de Terraverde, com cabelos verdes como as folhas da floresta e olhos brilhantes como as estrelas. Ela é habilidosa em magia da natureza e tem uma conexão profunda com o Leviatã Terra Mãe, que a permite comunicar-se com as plantas e os animais. Aria sonha em proteger a cidade e a floresta de ameaças, mas suas dores mais profundas vêm de uma tragédia familiar que a assombra desde a infôncia.",
+                            "world": "Arkonix",
+                            "kingdom": "Eldrida",
+                            "town": "Terraverde"
+                        },
+                        "Kael Darkhaven": {
+                            "name": "Kael Darkhaven",
+                            "description": "Kael é um guerreiro sombrio de Eldrida, com pele escura como a noite e cabelos negros como a escuridão. Ele é habilidoso em combate e liderança, e é respeitado por seus camaradas. No entanto, Kael tem uma dor secreta: sua família foi morta em uma batalha contra criaturas sombrias, e ele busca vingança e justiça. Seu maior desejo é encontrar a paz e a redenção, mas suas ações são motivadas pela raiva e pela sede de vingança.",
+                            "world": "Arkonix",
+                            "kingdom": "Eldrida",
+                            "town": "Terraverde"
+                        },
+                        "Zephyr Windsong": {
+                            "name": "Zephyr Windsong",
+                            "description": "Zephyr é um aventureiro de Arkonix, com cabelos brancos como a neve e olhos azuis como o céu. Ele é habilidoso em navegação e exploração, e tem conhecimento de todas as rotas e segredos dos Leviatãs. Zephyr busca descobrir novos lugares e segredos, mas sua maior dor é a solidão, pois suas jornadas contínuas o mantêm longe de suas raízes e de seus entesqueridos. Ele deseja encontrar um lugar para chamar de lar, onde possa se sentir pertencente.",
+                            "world": "Arkonix",
+                            "kingdom": "Eldrida",
+                            "town": "Terraverde"
+                        }
+                    }
+                }
+            }
+        },
+        "Kraelion": {
+            "name": "Kraelion",
+            "description": "Kraelion é um reino de montanhas e minas, onde a riqueza mineral é abundante e a força bruta é a lei. O reino é liderado pelo rei Thorne, um guerreiro feroz e ambicioso que expande seu território a qualquer custo. A cultura de Kraelion é baseada na força e na conquista, e seus habitantes são habilidosos em mineração e artes marciais. A história do reino remonta à época em que os primeiros habitantes descobriram as minas de ouro e prata, e desde então lutam para controlar as riquezas do subsolo.",
+            "world": "Arkonix",
+            "towns": {
+                "Kragnir": {
+                    "name": "Kragnir",
+                    "description": "Kragnir é uma cidade construída sobre o Leviatã mais antigo de Arkonix, conhecido como o \"Pai dos Mares\". Localizada na costa norte do reino de Kraelion, Kragnir é uma cidade portuária próspera, onde os mercadores e marinheiros vêm buscar fortuna e aventura. A cidade é famosa por sua arquitetura única, com edifícios curvos que se adaptam às escamas do Leviatã. O mercado de Kragnir é um dos maiores do reino, onde se pode encontrar tudo, desde peixes frescos até armas e armaduras.",
+                    "world": "Arkonix",
+                    "kingdom": "Kraelion",
+                    "npcs": {
+                        "Lyra Flynn": {
+                            "name": "Lyra Flynn",
+                            "description": "Lyra é uma habilidosa marinheira de Kragnir, com cabelos ruivos e olhos verdes brilhantes. Ela navega pelo mundo em seu barco, \"O Corsário\", em busca de tesouros e aventuras. Lyra é uma mulher forte e independente, que lutou para se tornar uma das melhores marinheiras do porto. No entanto, ela esconde uma dor profunda: a perda de seu pai, que desapareceu no mar quando ela era jovem. Ela deseja encontrar o que resta dele e descobrir o segredo que ele guardava.",
+                            "world": "Arkonix",
+                            "kingdom": "Kraelion",
+                            "town": "Kragnir"
+                        },
+                        "Thrain Blackbeard": {
+                            "name": "Thrain Blackbeard",
+                            "description": "Thrain é um minero de Kraelion, com uma barba negra e uma cicatriz no olho esquerdo. Ele é um dos melhores da guilda de mineiros de Kraelion, conhecido por sua força bruta e habilidade em encontrar minas ricas. Thrain sonha em encontrar a mina mais rica do reino, para garantir a prosperidade de sua família e da guilda. No entanto, ele sofre com a pesada carga de responsabilidade que recai sobre seus ombros, pois é o filho mais velho do rei Thorne e Herdeiro do trono.",
+                            "world": "Arkonix",
+                            "kingdom": "Kraelion",
+                            "town": "Kragnir"
+                        },
+                        "Zephyr Windsong": {
+                            "name": "Zephyr Windsong",
+                            "description": "Zephyr é um eremita que vive nos Leviatãs, com cabelos longos e brancos e olhos que brilham como estrelas. Ele é um sábio e um curandeiro, que passou anos estudando as criaturas e as plantas dos Leviatãs. Zephyr é um homem pacífico, que deseja preservar a harmonia entre os Leviatãs e os habitantes de Arkonix. No entanto, ele sofre com a preocupação de que as ações dos habitantes do reino de Kraelion possam afetar o equilíbrio do mundo e ameaçar a existência dos Leviatãs.",
+                            "world": "Arkonix",
+                            "kingdom": "Kraelion",
+                            "town": "Kragnir"
+                        }
+                    }
+                },
+                "Tharros": {
+                    "name": "Tharros",
+                    "description": "Tharros é uma cidade mineradora localizada nas montanhas centrais do reino de Kraelion. A cidade é conhecida por suas minas de ouro e prata, que são exploradas há séculos. Tharros é uma cidade dura e rude, onde os mineiros e guerreiros são os reis. A cidade é liderada pelo senhor feudal, Grimgold Ironfist, um homem brutal e justo. A história de Tharros remonta à época em que os primeiros mineiros descobriram as minas de ouro e prata, e desde então a cidade luta para controlar as riquezas do subsolo.",
+                    "world": "Arkonix",
+                    "kingdom": "Kraelion",
+                    "npcs": {
+                        "Eira Shadowglow": {
+                            "name": "Eira Shadowglow",
+                            "description": "Eira é uma jovem habilidosa em arkana, uma habilidade mágica que lhe permite controlar as sombras e a luz. Ela vive em Arkonix, na cidade de Corallia, que repousa sobre o Leviatã mais antigo e sábio, o Ancião. Eira tem cabelos pretos como a noite e olhos que brilham como as estrelas, e é conhecida por sua beleza e sua habilidade em criar ilusões. No entanto, ela tem um segredo: suas habilidades arkônicas são uma maldição que a faz sofrer com dores intensas e visões terríveis. Eira deseja encontrar um jeito de controlar suas habilidades e superar suas dores.",
+                            "world": "Arkonix",
+                            "kingdom": "Kraelion",
+                            "town": "Tharros"
+                        },
+                        "Thrain Blackbeard": {
+                            "name": "Thrain Blackbeard",
+                            "description": "Thrain é um mineiro e guerreiro de Tharros, que lutou por anos nas minas de ouro e prata do reino de Kraelion. Ele tem uma barba negra como carvão e olhos que brilham como o metal precioso que minerou. Thrain é um homem duro e rude, que não tem medo de nada, exceto pela possibilidade de que o rei Thorne decida que a riqueza do subsolo seja mais importante do que as vidas de seus súditos. Thrain tem um desejo profundo de criar uma vida melhor para sua família e seus amigos, longe da exploração dos rawData.",
+                            "world": "Arkonix",
+                            "kingdom": "Kraelion",
+                            "town": "Tharros"
+                        },
+                        "Lyra Moonwhisper": {
+                            "name": "Lyra Moonwhisper",
+                            "description": "Lyra é uma sacerdotisa do Ancião, o Leviatã mais antigo e sábio de Arkonix. Ela tem cabelos loiros como a lua e olhos que brilham como as estrelas, e é conhecida por sua sabedoria e sua habilidade em conversar com os Leviatãs. Lyra vive em Corallia, na cidade que repousa sobre o Ancião, e passa seus dias estudando as antigas habilidades dos Leviatãs e cuidando dos habitantes da cidade. No entanto, ela tem uma dor profunda: a perda de sua irmã, que foi levada por uma doença misteriosa anos atrás. Lyra deseja encontrar um jeito de curar a doença e encontrar seu irmão, que desapareceu em busca de uma cura.",
+                            "world": "Arkonix",
+                            "kingdom": "Kraelion",
+                            "town": "Tharros"
+                        }
+                    }
+                },
+                "Eldrida": {
+                    "name": "Eldrida",
+                    "description": "Eldrida é uma cidade mística localizada na floresta mais antiga do reino de Kraelion. A cidade é conhecida por suas ruas sinuosas e edifícios esotéricos, onde os magos e sábios vêm buscar conhecimento e sabedoria. Eldrida é uma cidade de mistérios e segredos, onde a magia é uma parte integral da vida cotidiana. A cidade é liderada pelo Conselho dos Sábios, um grupo de magos poderosos que governam a cidade com sabedoria e justiça. A história de Eldrida remonta à época em que os primeiros magos descobriram as propriedades mágicas da floresta, e desde então a cidade é um centro de conhecimento e sabedoria.",
+                    "world": "Arkonix",
+                    "kingdom": "Kraelion",
+                    "npcs": {
+                        "Lyra Flynn": {
+                            "name": "Lyra Flynn",
+                            "description": "Lyra é uma jovem habitante de Arkonix, moradora da cidade de Corallia, que é construída sobre o lombo de um Leviatã chamado Aetheria. Ela é uma cartógrafa habilidosa, responsável por mapear as rotas e cursos d'água da cidade em movimento. Lyra tem cabelos castanhos escuros e olhos verdes brilhantes, e é conhecida por sua habilidade em navegar pelas ruas instáveis da cidade. Ela sonha em descobrir novos lugares e explorar as profundezas dos Leviatãs, mas seu maior medo é perder o equilíbrio e cair nas profundezas do oceano.",
+                            "world": "Arkonix",
+                            "kingdom": "Kraelion",
+                            "town": "Eldrida"
+                        },
+                        "Kael Thorne": {
+                            "name": "Kael Thorne",
+                            "description": "Kael é o filho mais novo do rei Thorne de Kraelion, e um habilidoso guerreiro em treinamento. Ele tem cabelos louros e olhos azuis intensos, e é conhecido por sua força e habilidade em batalha. Kael sonha em se tornar um grande líder como seu pai, mas ao mesmo tempo sente-se sufocado pela expectativa de ter que seguir os passos do rei. Ele tem uma dor profunda por ter perdido a mãe em uma batalha quando era jovem.",
+                            "world": "Arkonix",
+                            "kingdom": "Kraelion",
+                            "town": "Eldrida"
+                        },
+                        "Elwes Stormwind": {
+                            "name": "Elwes Stormwind",
+                            "description": "Elwes é um mago poderoso e místico que vive em Eldrida, conhecido por sua habilidade em controlar o tempo e a natureza. Ele tem cabelos brancos e olhos castanhos profundos, e é respeitado por sua sabedoria e conhecimento. Elwes busca descobrir os segredos mais profundos da natureza e da magia, e sonha em usar seu poder para proteger a floresta e a cidade de Eldrida. No entanto, ele tem uma dor secreta por ter perdido seu amor em uma batalha contra as forças das trevas.",
+                            "world": "Arkonix",
+                            "kingdom": "Kraelion",
+                            "town": "Eldrida"
+                        }
+                    }
+                }
+            }
+        },
+        "Calonia": {
+            "name": "Calonia",
+            "description": "Calonia é um reino de ilhas e mares, onde a vida é uma dança entre as ondas e o vento. O reino é liderado pelo almirante Orion, um navegador habilidoso e visionário que explora os mares em busca de novas rotas e tesouros. A cultura de Calonia é baseada na liberdade e na aventura, e seus habitantes são habilidosos em navegação e pesca. A história do reino remonta à época em que os primeiros habitantes descobriram as ilhas e começaram a construir suas cidades flutuantes.",
+            "world": "Arkonix",
+            "towns": {
+                "Aquaria": {
+                    "name": "Aquaria",
+                    "description": "Aquaria é uma cidade construída sobre o dorso de um Leviatã chamado Aqualuna, que vagueia pelas águas cristalinas do Mar de Calonia. A cidade é conhecida por suas belas praias e seus mercados de peixes frescos. O lugar mais importante da cidade é o Templo da Ondina, um local sagrado onde os habitantes veneram a deusa do mar. Segundo a lenda, Aqualuna foi a primeira Leviatã a ser domesticada pelos habitantes de Calonia, e desde então, a cidade de Aquaria se tornou um símbolo de harmonia entre humanos e criaturas marinhas.",
+                    "world": "Arkonix",
+                    "kingdom": "Calonia",
+                    "npcs": {
+                        "Lyra Flynn": {
+                            "name": "Lyra Flynn",
+                            "description": "Lyra é uma jovem pescadora de Aquaria, com cabelos castanhos ondulados e olhos azuis brilhantes. Ela herdou o amor pela navegação de seu pai, que desapareceu em alto mar anos atrás. Lyra sonha em encontrar seu pai e descobrir os segredos do mar. Sua dor mais profunda é a perda de seu pai e a falta de respostas sobre seu destino. Ela está sempre em busca de aventuras e desafios, e seu coração está ligado ao mar e às criaturas que o habitam.",
+                            "world": "Arkonix",
+                            "kingdom": "Calonia",
+                            "town": "Aquaria"
+                        },
+                        "Kael Darkhaven": {
+                            "name": "Kael Darkhaven",
+                            "description": "Kael é um homem sombrio e misterioso que vive em Calonia, com os cabelos pretos cortados rente à cabeça e olhos escuros que parecem esconder segredos. Ele é um caçador de tesouros habilidoso e líder de uma equipe de aventureiros. Kael procura o tesouro perdido de Calonia, uma lenda que faz seu coração bater mais rápido. Sua dor mais profunda é a perda de sua família em uma expedição desastrosa. Ele deseja encontrar o tesouro não apenas por causa da riqueza, mas também para honrar a memória de sua família.",
+                            "world": "Arkonix",
+                            "kingdom": "Calonia",
+                            "town": "Aquaria"
+                        },
+                        "Eira Luminari": {
+                            "name": "Eira Luminari",
+                            "description": "Eira é uma sacerdotisa do Templo da Ondina em Aquaria, com cabelos longos e dourados que brilham como o sol. Ela é devotada à deusa do mar e passa seus dias estudando as escrituras sagradas e fazendo oferendas à Leviatã Aqualuna. Eira tem uma conexão mística com o mar e seus habitantes, e sonha em ajudar a manter a harmonia entre humanos e criaturas marinhas. Sua dor mais profunda é a preocupação com o futuro da cidade, pois acha que Aqualuna está mudando seu comportamento. Eira deseja encontrar uma maneira de comunicar-se com a Leviatã e proteger a cidade que ela ama.",
+                            "world": "Arkonix",
+                            "kingdom": "Calonia",
+                            "town": "Aquaria"
+                        }
+                    }
+                },
+                "Ventaria": {
+                    "name": "Ventaria",
+                    "description": "Ventaria é uma cidade construída sobre o dorso de um Leviatã chamado Ventus, que vagueia pelas planícies ventosas do Reino de Calonia. A cidade é conhecida por suas torres de vento e seus engenhos de vento que geram energia para a cidade. O lugar mais importante da cidade é a Academia dos Ventos, uma escola de magia que ensina aos jovens a controlar o vento e a prever as mudanças climáticas. Segundo a lenda, Ventus foi o Leviatã que ajudou o almirante Orion a descobrir as rotas mais seguras para navegar pelo Mar de Calonia.",
+                    "world": "Arkonix",
+                    "kingdom": "Calonia",
+                    "npcs": {
+                        "Eira Astrum": {
+                            "name": "Eira Astrum",
+                            "description": "Eira é uma jovem maga que vive em Ventaria e é alumna da Academia dos Ventos. Ela tem olhos azuis claros e cabelos louros que se movem ao vento. Eira é habilidosa em controlar os ventos e sonha em se tornar uma grande mestra de magia, capaz de prever e controlar as mudanças climáticas que ameaçam o Reino de Calonia. Sua dor mais profunda é ter perdido sua família em uma tempestade devastadora quando era criança, e seu desejo mais profundo é proteger os habitantes de Ventaria dos perigos do mar e do vento.",
+                            "world": "Arkonix",
+                            "kingdom": "Calonia",
+                            "town": "Ventaria"
+                        },
+                        "Kael Darkfist": {
+                            "name": "Kael Darkfist",
+                            "description": "Kael é um guerreiro rude e destemido que vive em Calonia e serve como capitão da guarda do almirante Orion. Ele tem olhos escuros e cabelos pretos, e sua pele está marcada por cicatrizes de batalhas. Kael é um especialista em lutar contra os monstros marinhos que ameaçam as ilhas do reino, e sonha em se tornar o mais grande herói do mar. Sua dor mais profunda é ter perdido seu irmão em uma batalha contra um grandeKraken, e seu desejo mais profundo é vingar sua morte e proteger o reino de Calonia.",
+                            "world": "Arkonix",
+                            "kingdom": "Calonia",
+                            "town": "Ventaria"
+                        },
+                        "Niamh Leviathanheart": {
+                            "name": "Niamh Leviathanheart",
+                            "description": "Niamh é uma sacerdotisa que vive em Arkonix e é responsável por manter a harmonia entre as cidades e os Leviatãs. Ela tem olhos verdes brilhantes e cabelos longos e negros, e sua pele está tatuada com símbolos de proteção e respeito. Niamh é uma especialista em comunicar-se com os Leviatãs e sonha em entender o segredo das criaturas sagradas. Sua dor mais profunda é ter visto as cidades serem destruídas por guerras e conflitos, e seu desejo mais profundo é manter a paz em Arkonix e proteger os Leviatãs de quem os ameaçam.",
+                            "world": "Arkonix",
+                            "kingdom": "Calonia",
+                            "town": "Ventaria"
+                        }
+                    }
+                },
+                "Coralia": {
+                    "name": "Coralia",
+                    "description": "Coralia é uma cidade construída sobre o dorso de um Leviatã chamado Coralix, que vagueia pelas águas quentes do Mar de Calonia. A cidade é conhecida por suas praias de coral e seus mercados de joias e objetos preciosos. O lugar mais importante da cidade é o Palácio do Coral, a residência do almirante Orion e o centro do governo de Calonia. Segundo a lenda, Coralix foi o Leviatã que ajudou os primeiros habitantes de Calonia a descobrir as ilhas e a construir suas cidades flutuantes.",
+                    "world": "Arkonix",
+                    "kingdom": "Calonia",
+                    "npcs": {
+                        "Lyra Flynn": {
+                            "name": "Lyra Flynn",
+                            "description": "Lyra é uma jovem pescadora de Coralia, com cabelos loiros e olhos azuis brilhantes como o mar. Ela gosta de usar roupas leves e coloridas, e suas habilidades em pesca são lendárias. Lyra sonha em encontrar o tesouro perdido de Calonia, uma lenda que sua avó costumava contar. No entanto, ela também tem medo de perder sua liberdade e independência, pois o almirante Orion começou a impor regulamentações mais rígidas sobre a pesca nos mares de Calonia.",
+                            "world": "Arkonix",
+                            "kingdom": "Calonia",
+                            "town": "Coralia"
+                        },
+                        "Arin Thorne": {
+                            "name": "Arin Thorne",
+                            "description": "Arin é um jovem{!!} guerreiro de Arkonix, com cabelos negros e olhos vermelhos como as estrelas que brilham nos olhos dos Leviatãs. Ele é habilidoso em combate e está treinando para se tornar um guardião dos Leviatãs. Arin deseja proteger as criaturas sagradas e sua cultura de Arkonix, mas também tem medo de que o crescente interesse dos empresários em explorar os Leviatãs possa ameaçar a harmonia entre os habitantes e as criaturas.",
+                            "world": "Arkonix",
+                            "kingdom": "Calonia",
+                            "town": "Coralia"
+                        },
+                        "Nix Orion": {
+                            "name": "Nix Orion",
+                            "description": "Nix é o filho mais jovem do almirante Orion, de Calonia. Ele tem cabelos castanhos e olhos verdes como as ondas do mar. Nix é um navegador habilidoso e sonha em seguir os passos de seu pai, mas também tem uma paixão secreta pela magia e pelo estudo das estrelas. Ele deseja descobrir os segredos dos mares e do céu, mas tem medo de que seu pai não o apoie em sua escolha.",
+                            "world": "Arkonix",
+                            "kingdom": "Calonia",
+                            "town": "Coralia"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

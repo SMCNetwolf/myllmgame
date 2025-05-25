@@ -1,7 +1,6 @@
 class AudioManager {
     constructor() {
         this.backgroundMusic = null;
-        this.soundEffect = null;
         this.currentAmbientSound = null;
         this.audioVolume = 0.3;
         this.isMuted = localStorage.getItem('audioMuted') === 'true';
@@ -14,14 +13,9 @@ class AudioManager {
             this.backgroundMusic = new Audio();
             this.backgroundMusic.loop = true;
             this.backgroundMusic.volume = this.isMuted ? 0 : this.audioVolume;
-            console.log('AudioManager: Background audio element created', this.backgroundMusic);
+            console.log('AudioManager: Audio element created', this.backgroundMusic);
+            this.createAudioControls();
         }
-        if (!this.soundEffect) {
-            this.soundEffect = new Audio();
-            this.soundEffect.volume = this.isMuted ? 0 : this.audioVolume;
-            console.log('AudioManager: Sound effect audio element created', this.soundEffect);
-        }
-        this.createAudioControls();
     }
 
     createAudioControls() {
@@ -50,7 +44,6 @@ class AudioManager {
     toggleMute() {
         this.isMuted = !this.isMuted;
         this.backgroundMusic.volume = this.isMuted ? 0 : this.audioVolume;
-        this.soundEffect.volume = this.isMuted ? 0 : this.audioVolume;
         localStorage.setItem('audioMuted', this.isMuted);
         const muteButton = document.getElementById('toggleMusicBtn');
         if (muteButton) {
@@ -65,26 +58,8 @@ class AudioManager {
         this.audioVolume = volume;
         if (!this.isMuted) {
             this.backgroundMusic.volume = volume;
-            this.soundEffect.volume = volume;
         }
         console.log('AudioManager: Volume set to', volume);
-    }
-
-    playSoundEffect(soundPath) {
-        console.log('AudioManager: Playing sound effect:', soundPath);
-        this.soundEffect.src = soundPath;
-        this.soundEffect.loop = false;
-        const playPromise = this.soundEffect.play();
-        if (playPromise !== undefined) {
-            playPromise
-                .then(() => {
-                    console.log('AudioManager: Sound effect played successfully');
-                })
-                .catch(error => {
-                    console.warn('AudioManager: Sound effect playback blocked:', error);
-                    this.showPlayMusicNotification(soundPath);
-                });
-        }
     }
 
     playAmbientSound(ambientSound, musicPath) {

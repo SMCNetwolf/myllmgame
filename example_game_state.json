@@ -1,0 +1,27 @@
+{
+    "history": [
+        {
+            "role": "assistant", 
+            "content": "Você acaba de chegar em Eldrida e a cidade está em polvorosa. Rumores se espalham sobre uma alta traição em vias de acontecer..."
+            }
+    ], 
+    "output_image": "static/image/default_image.png", 
+    "ambient_sound": "static/audio/default_audio.mp3", 
+    "location": "Eldrida", 
+    "current_state": 1, 
+    "health": 10, 
+    "resources": {
+        "wands": 2, 
+        "potions": 2, 
+        "energy": 5
+    }, "clues": [], 
+    "npc_status": {
+        "Lyra": "Neutral", 
+        "Kael": "Neutral"
+    }, 
+    "combat_results": [], 
+    "puzzle_results": [], 
+    "character": "Herói", 
+    "active_puzzle": null, 
+    "active_combat": null
+}

@@ -1,6 +1,7 @@
 import os
 import logging
 import json
+import random
 from flask import Flask, render_template, request, session, redirect, url_for, flash, make_response, jsonify
 from flask_bcrypt import Bcrypt
 import sqlite3
@@ -18,7 +19,6 @@ from main_flask import (
     clean_duplicate_history
 )
 from create_log import create_log, clean_old_logs
-
 from handle_db import (
     init_db, get_db_connection, upload_db_to_gcs, download_db_from_gcs,
     confirm_save, retrieve_game_list, retrieve_game, clean_temp_saves
@@ -26,7 +26,8 @@ from handle_db import (
 
 app = Flask(__name__)
 
-#TODO: demora na geração de imagem, salvar imagem com prompt junto talvez via tupla? DETECT_INVENTORY_CHANGES: Invalid JSON response
+#TODO: for latter, not now: demora na geração de imagem, salvar imagem com prompt junto talvez via tupla? DETECT_INVENTORY_CHANGES: Invalid JSON response
+#TODO: for latter, not now: verify code robustness to handle multiple simultaneous users
 
 # Download database from GCS at startup
 os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
@@ -58,12 +59,13 @@ app.config['SESSION_COOKIE_NAME'] = 'rpg_session'
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
 
-#TODO: check if these two functions are really needed
+#TODO: check if get_relative_image_path is really needed
 def get_relative_image_path(full_path):
     if not full_path:
         return "default_image.png"
     return full_path.split('static/')[-1] if 'static/' in full_path else full_path
 
+#TODO: check if get_relative_audio_path is really needed
 def get_relative_audio_path(full_path):
     if not full_path:
         return "default_audio.mp3"
@@ -182,19 +184,28 @@ def game():
             if VERBOSE:
                 create_log("ROUTE /GAME: No autosave found, initialized new")
 
+    # Ensure resources is initialized
+    if 'resources' not in game_state:
+        game_state['resources'] = {'wands': 2, 'potions': 2, 'energy': 5}
+        create_log(f"ROUTE /GAME: Initialized missing resources for user {username}")
+
     raw_image_path = game_state['output_image']
     image_filename = get_relative_image_path(raw_image_path)
     ambient_sound = get_relative_audio_path(game_state['ambient_sound'])
-
     response = make_response(render_template("game.html",
-                                            output="",
+                                            output="Esse é o mundo mágico de Arkonix!",
                                             output_image=image_filename,
                                             ambient_sound=ambient_sound,
-                                            chat_history= format_chat_history([game_state['history'][-1]], game_state) if game_state['history'] else "" )) #format_chat_history(game_state['history'], game_state)  ))
+                                            chat_history=format_chat_history([game_state['history'][-1]], game_state) if game_state['history'] else "",
+                                            game_state=game_state,
+                                            health=game_state.get('health', 10),
+                                            resources=game_state.get('resources', {'wands': 2, 'potions': 2, 'energy': 5}),
+                                            current_state=game_state.get('current_state', 1),
+                                            clues=game_state.get('clues', []),
+                                            npc_status=game_state.get('npc_status', {})))
     response.headers['Cache-Control'] = 'no-store'
     return response
 
-#TODO: it seems that when entering /command from /game, initial game state is created again because it was not stored in the database
 @app.route("/command", methods=["POST"])
 def process_command():
     if 'user_id' not in session:
@@ -208,32 +219,45 @@ def process_command():
     command = request.form.get("command")
 
     # Load game state (prefer autosave)
-    with get_db_connection() as conn:
+    with get_db_connection(int_verbose=False) as conn:
         c = conn.cursor()
         c.execute("SELECT game_state FROM game_states WHERE user_id = ? AND game_name = 'autosave'", (user_id,))
         row = c.fetchone()
         if row:
+            if VERBOSE:
+                create_log("ROUTE /COMMAND: autosave found")
             game_state = json.loads(row['game_state'])
-            if not validate_game_state(game_state):
+            if not validate_game_state(game_state): #validate_game_state handles log in case of failure
                 game_state = get_initial_game_state()
                 if VERBOSE:
                     create_log("ROUTE /COMMAND: Invalid autosave, initialized new")
         else:
-            game_state = get_initial_game_state()
             if VERBOSE:
                 create_log("ROUTE /COMMAND: No autosave, initialized new")
+                game_state = get_initial_game_state(int_verbose=VERBOSE)
 
-    # Clean history to remove duplicates while preserving order
-    clean_duplicate_history(game_state, int_verbose=VERBOSE)
+
+    """
+    #TODO: for latter: check if this is needed
+    # Ensure resources is initialized
+    if 'resources' not in game_state:
+        game_state['resources'] = {'wands': 2, 'potions': 2, 'energy': 5}
+        create_log(f"ROUTE /COMMAND: Initialized missing resources for user {username}")
     
-    output = run_action(command, game_state)
+    # Clean history to remove duplicates
+    clean_duplicate_history(game_state, int_verbose=VERBOSE)
+    """
+    if VERBOSE:
+        create_log(f"ROUTE /COMMAND: Game State:\n{game_state}")
+
+    output = run_action(command, game_state, int_verbose=VERBOSE)
     timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
     gcs_path = f"{DEFAULT_IMAGE_FILE_PATH.split('.png')[0]}_{timestamp}.png"
     if not isinstance(output, str):
         create_log(f"\n\nROUTE /COMMAND: Error: run_action returned non-string: {type(output)}\n\n", force_log=True)
         output = "Error: Invalid response from run_action"
 
-    # Save updated game state as autosave (overwrite existing)
+    # Save updated game state as autosave
     with get_db_connection() as conn:
         c = conn.cursor()
         c.execute("INSERT OR REPLACE INTO game_states (user_id, game_name, game_state, created_at) VALUES (?, ?, ?, ?)",
@@ -242,36 +266,47 @@ def process_command():
         if VERBOSE:
             create_log(f"ROUTE /COMMAND: Overwrote autosave game state in database")
     
-    upload_db_to_gcs()
-    save_temp_game_state(game_state)
+    upload_db_to_gcs(int_verbose=False)
+    save_temp_game_state(game_state, int_verbose=False)
     ambient_sound = get_relative_audio_path(game_state['ambient_sound'])
     raw_image_path = game_state['output_image']
     image_filename = get_relative_image_path(raw_image_path)
 
-    # Format only the latest interaction (last two history entries: user command and assistant response)
+    # Format latest interaction
     latest_interaction = game_state['history'][-2:] if len(game_state['history']) >= 2 else game_state['history']
     chat_history = format_chat_history(latest_interaction, game_state) if game_state['history'] else ""
 
     # Handle AJAX request
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         response_data = {
-            'output': "",  # Set output to empty to avoid rendering directly
+            'output': '',
             'output_image': url_for('static', filename=image_filename),
             'ambient_sound': url_for('static', filename=ambient_sound),
-            'chat_history': chat_history
+            'chat_history': chat_history,
+            'health': game_state.get('health', 10),
+            'resources': game_state.get('resources', {'wands': 2, 'potions': 2, 'energy': 5}),
+            'current_state': game_state.get('current_state', 1),
+            'clues': game_state.get('clues', []),
+            'npc_status': game_state.get('npc_status', {}),
+            'sound_trigger': 'combat' if 'Combat' in output else 'puzzle' if 'Puzzle' in output else None
         }
         create_log(f"\nROUTE /COMMAND-AJAX: User {username}\n\nQuestion: {command}", force_log=True)
         create_log(f"ROUTE /COMMAND-AJAX: Generated image: {gcs_path}", force_log=True)
         create_log(f"ROUTE /COMMAND-AJAX: Completion: {chat_history}\n", force_log=True)
         return jsonify(response_data)
 
-    # Fallback for non-AJAX requests
-        
+    # Fallback for non-AJAX
     response = make_response(render_template("game.html",
-                                            output="",  # Set output to empty to avoid rendering directly
+                                            output=output,
                                             output_image=image_filename,
                                             ambient_sound=ambient_sound,
-                                            chat_history= chat_history ))
+                                            chat_history=chat_history,
+                                            game_state=game_state,
+                                            health=game_state.get('health', 10),
+                                            resources=game_state.get('resources', {'wands': 2, 'potions': 2, 'energy': 5}),
+                                            current_state=game_state.get('current_state', 1),
+                                            clues=game_state.get('clues', []),
+                                            npc_status=game_state.get('npc_status', {})))
     response.headers['Cache-Control'] = 'no-store'
     create_log(f"\nROUTE /COMMAND: User {username}\n\nQuestion: {command}", force_log=True)
     create_log(f"ROUTE /COMMAND: Generated image: {gcs_path}", force_log=True)
@@ -291,8 +326,13 @@ def new_game():
     if VERBOSE:
         create_log(f"ROUTE /NEW_GAME: User: {user_id} - {username}")
 
-    clean_temp_saves(force=True)
+    clean_temp_saves(int_verbose=VERBOSE)
     game_state = get_initial_game_state()
+
+    # Ensure resources is initialized
+    if 'resources' not in game_state:
+        game_state['resources'] = {'wands': 2, 'potions': 2, 'energy': 5}
+        create_log(f"ROUTE /NEW_GAME: Initialized missing resources for user {username}")
 
     with get_db_connection() as conn:
         c = conn.cursor()
@@ -307,10 +347,16 @@ def new_game():
     ambient_sound = get_relative_audio_path(game_state['ambient_sound'])
 
     response = make_response(render_template("game.html",
-                                            output="New game started!",
+                                            output="Novo Jogo Criado!",
                                             output_image=image_filename,
                                             ambient_sound=ambient_sound,
-                                            chat_history= format_chat_history([game_state['history'][-1]], game_state) if game_state['history'] else "" )) #format_chat_history(game_state['history'], game_state)  ))
+                                            chat_history=format_chat_history([game_state['history'][-1]], game_state) if game_state['history'] else "",
+                                            game_state=game_state,
+                                            health=game_state.get('health', 10),
+                                            resources=game_state.get('resources', {'wands': 2, 'potions': 2, 'energy': 5}),
+                                            current_state=game_state.get('current_state', 1),
+                                            clues=game_state.get('clues', []),
+                                            npc_status=game_state.get('npc_status', {})))
     response.headers['Cache-Control'] = 'no-store'
     return response
 
@@ -349,10 +395,14 @@ def save():
             if VERBOSE:
                 create_log("ROUTE /SAVE_GAME: No autosave found, initialized new")
 
+        # Ensure resources is initialized
+        if 'resources' not in game_state:
+            game_state['resources'] = {'wands': 2, 'potions': 2, 'energy': 5}
+            create_log(f"ROUTE /SAVE_GAME: Initialized missing resources for user {username}")
+
         try:
             result = confirm_save(filename, game_state, user_id=user_id)
             if result["status"] == "max_saves_reached":
-                # Store pending save data in session and redirect to overwrite selection
                 session['pending_save_filename'] = filename
                 session['pending_game_state'] = json.dumps(game_state)
                 create_log(f"ROUTE /SAVE_GAME: Stored pending game state for user: {username}, filename: {filename}", force_log=True)
@@ -399,7 +449,11 @@ def load():
                 create_log(f"\n\nROUTE /RETRIEVE_GAME: Loaded game state is invalid for user: {username}\n\n")
                 raise ValueError("Loaded game state is invalid")
 
-            # Clean history to remove duplicates while preserving order
+            # Ensure resources is initialized
+            if 'resources' not in game_state:
+                game_state['resources'] = {'wands': 2, 'potions': 2, 'energy': 5}
+                create_log(f"ROUTE /RETRIEVE_GAME: Initialized missing resources for user {username}")
+
             clean_duplicate_history(game_state, int_verbose=VERBOSE)
 
             flash("Game loaded successfully!", "success")
@@ -419,10 +473,16 @@ def load():
             ambient_sound = get_relative_audio_path(game_state['ambient_sound'])
 
             response = make_response(render_template("game.html",
-                                                    output="Game loaded!",
+                                                    output="Jogo Carregado!",
                                                     output_image=image_filename,
                                                     ambient_sound=ambient_sound,
-                                                    chat_history= format_chat_history(game_state['history'], game_state) if game_state['history'] else "" )) # gets the whole history
+                                                    chat_history=format_chat_history(game_state['history'], game_state) if game_state['history'] else "",
+                                                    game_state=game_state,
+                                                    health=game_state.get('health', 10),
+                                                    resources=game_state.get('resources', {'wands': 2, 'potions': 2, 'energy': 5}),
+                                                    current_state=game_state.get('current_state', 1),
+                                                    clues=game_state.get('clues', []),
+                                                    npc_status=game_state.get('npc_status', {})))
             response.headers['Cache-Control'] = 'no-store'
             return response
         except ValueError as ve:
@@ -557,3 +617,6 @@ def overwrite_game():
     ))
     response.headers['Cache-Control'] = 'no-store'
     return response
+
+
+    

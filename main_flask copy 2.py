@@ -24,7 +24,7 @@ from config import (
 from prompts import (
     everyone_content_policy, summarize_prompt_template, system_prompt, system_inventory_prompt,
     command_interpreter_prompt, get_false_clue_prompt, get_trick_prompt, get_attack_prompt,
-    get_false_ally_prompt, get_is_safe_prompt, get_combat_resolution_prompt, get_check_clue_prompt
+    get_false_ally_prompt, get_is_safe_prompt, get_combat_resolution_prompt
 )
 
 
@@ -486,33 +486,36 @@ def handle_combat(game_state, event, int_verbose=False):
     if combat['tries'] > 0:
         response = client.chat.completions.create(
             model=MODEL,
-            messages=[{"role": "user", "content": get_attack_prompt(combat.get('combat_type', 'physical'), story_context)}],
+            messages=[{"role": "user", "content": get_attack_prompt(combat.get('combat_type', 'physical'), story_context) + f"\nAttempt {combat['tries'] + 1}: Provide a new unique clue different from: {combat['clue']}"}],
+            max_tokens=100,
             temperature=0.3
         ).choices[0].message.content
         if int_verbose:
-            create_log(f"MAIN_FLASK: HANDLE_COMBAT: JSON(?) response for try {combat['tries'] + 1}: {response}")
-
+            create_log(f"MAIN_FLASK: HANDLE_COMBAT: Clue response for try {combat['tries'] + 1}: {response}")
         try:
             attack_data = json.loads(response)
             combat['clue'] = attack_data['clue']
-            if int_verbose:
-                create_log(f"MAIN_FLASK: HANDLE_COMBAT: JSON wellformed - Clue response for try {combat['tries'] + 1}: {attack_data['clue']}")
         except json.JSONDecodeError:
-            create_log("\n\nMAIN_FLASK: HANDLE_COMBAT: Invalid JSON for attack clue: {response}\n\n", force_log=True)
+            create_log("\n\nMAIN_FLASK: HANDLE_COMBAT: Invalid JSON for attack clue\n\n", force_log=True)
             combat['clue'] = "Tente novamente com uma nova estratégia."
 
     game_state['active_combat'] = combat
 
-    # Return narrative including the clue for all tries
-    narrative = f"PERIGO!: {combat['content']} Dica: {combat['clue']} (Tentativa {combat['tries'] + 1}/{MAX_TRIES})"
+    # Return narrative for new combats (tries == 0)
+    if combat['tries'] == 0:
+        narrative = f"Perigo de Combate: {combat['content']} Dica: {combat['clue']} (Tentativa 1/{MAX_TRIES})"
+        if int_verbose:
+            create_log(f"MAIN_FLASK: HANDLE_COMBAT: Presented combat: {combat['content']}, Clue: {combat['clue']}, Try: 1/{MAX_TRIES}")
+        return narrative, "combat"
+
     if int_verbose:
         create_log(f"MAIN_FLASK: HANDLE_COMBAT: Updated combat: {combat['content']}, Clue: {combat['clue']}, Try: {combat['tries'] + 1}/{MAX_TRIES}")
     
-    return narrative, "combat"
+    return None, None  # No output for ongoing combats, handled by resolve_combat
 
 def resolve_combat(game_state, action, int_verbose=False):
     """Resolve a combat event with random success probability and immersive narrative output."""
-    percent_success = 0.3  # Lowered from 0.5 to reduce win probability
+    percent_success = 0.5  # Increased for better balance
     combat = game_state.get('active_combat')
     if not combat:
         if int_verbose:
@@ -521,39 +524,17 @@ def resolve_combat(game_state, action, int_verbose=False):
 
     story_context = format_chat_history(game_state['history'][-4:], game_state)
     combat['tries'] += 1
-    if int_verbose:
-        create_log(f"MAIN_FLASK: RESOLVE_COMBAT: Updated combate tries to {combat['tries']}")
 
     # Calculate base win probability (0 to 1)
     base_win_prob = percent_success * (game_state['health'] / 10.0) * 0.4 + (game_state.get('skill', SKILL) / 100.0) * 0.3 + (INTELLIGENCE / 100.0) * 0.2 + (STRENGTH / 100.0) * 0.1
 
-    # Evaluate if clue was used
-    try:
-        prompt = get_check_clue_prompt(action, combat['clue'])
-        response = client.chat.completions.create(
-            model=MODEL,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3
-        ).choices[0].message.content
-        try:
-            clue_response = json.loads(response)
-            clue_used = clue_response.get('used_clue', False)
-            if int_verbose:
-                create_log(f"MAIN_FLASK: RESOLVE_COMBAT: Valid JSON in clue response informs if clue was used: {clue_used}")
-        except json.JSONDecodeError:
-            create_log(f"MAIN_FLASK: RESOLVE_COMBAT: Invalid JSON in clue response: {response}", force_log=True)
-            clue_used = False
-    except Exception as e:
-        create_log(f"MAIN_FLASK: RESOLVE_COMBAT: Error evaluating clue use: {str(e)}", force_log=True)
-        clue_used = False
-
+    # Check if action matches clue (case-insensitive, partial match)
+    clue_used = combat['clue'].lower() in action.lower() or any(word in action.lower() for word in combat['clue'].lower().split())
     win_prob = base_win_prob + 0.2 if clue_used else base_win_prob  # 20% boost if clue is used
     win_prob = min(max(win_prob, 0.0), 1.0)  # Clamp between 0 and 1
 
     # Determine success
     won = random.random() < win_prob
-    if int_verbose:
-        create_log(f"MAIN_FLASK: RESOLVE_COMBAT: Combat status: win probability: {win_prob}; won? {won}")
 
     # Update stats
     old_health = game_state['health']
@@ -571,7 +552,7 @@ def resolve_combat(game_state, action, int_verbose=False):
 
     # Determine result status
     result_status = "won" if won else "lost" if combat['tries'] >= MAX_TRIES else "ongoing"
-    resultado = "vitória" if result_status == "won" else "derrota" if result_status == "lost" else "em andamento"
+    resultado = "vitória" if result_status == "won" else "derrota" if result_status == "lost" else f"em andamento (tentativa {combat['tries']}/{MAX_TRIES})"
 
     # Generate narrative response
     prompt = get_combat_resolution_prompt(
@@ -584,7 +565,7 @@ def resolve_combat(game_state, action, int_verbose=False):
         old_skill,
         game_state['skill'],
         story_context,
-        combat['tries'],  # Ensure correct try number is passed
+        combat['tries'],
         MAX_TRIES
     )
     response = client.chat.completions.create(
@@ -598,16 +579,12 @@ def resolve_combat(game_state, action, int_verbose=False):
     if not is_safe_result:
         create_log(f"MAIN_FLASK: RESOLVE_COMBAT: Unsafe response: {response}", force_log=True)
         response = (
-            f"Sua ação não surtiu o efeito desejado, e a batalha tomou um rumo inesperado. Tente uma nova estratégia."
+            f"Sua ação não surtiu o efeito desejado, e a batalha tomou um rumo inesperado. Tente uma nova estratégia (tentativa {combat['tries']}/{MAX_TRIES})."
             if result_status == "ongoing"
             else "Sua ação não surtiu o efeito desejado, e a batalha terminou em derrota."
             if result_status == "lost"
             else "Você triunfou na batalha, mas a vitória teve um preço inesperado."
         )
-
-    # Append clue and try number to response for ongoing combats
-    if result_status == "ongoing":
-        response += f"\nDica: {combat['clue']} (Tentativa {combat['tries']}/{MAX_TRIES})"
 
     # Resolve combat
     if won or combat['tries'] >= MAX_TRIES:
@@ -619,7 +596,7 @@ def resolve_combat(game_state, action, int_verbose=False):
 
     if int_verbose:
         create_log(f"MAIN_FLASK: RESOLVE_COMBAT: Combat {result_status}, action: {action}, Win prob: {win_prob:.2f}, Clue used: {clue_used}, New skill: {game_state['skill']:.1f}, New health: {game_state['health']:.1f}, Response: {response}")
-
+    
     return response
 
 def handle_puzzle(game_state, event, int_verbose=False):
@@ -764,7 +741,6 @@ def run_action(message, game_state, int_verbose=False):
             trigger_event = True
 
 
-        #*****************************************************
         #DEBUG: forcing creation of attack event
         if game_state.get('active_combat') is None:
             trigger_event = True
@@ -773,7 +749,6 @@ def run_action(message, game_state, int_verbose=False):
         else:
             trigger_event = False
             action_type = "combat"
-        #*****************************************************
 
 
         event_result = ""
@@ -809,13 +784,11 @@ def run_action(message, game_state, int_verbose=False):
             skip_action = True
             if action_type == "combat" and game_state.get('active_combat'):
                 event_result = resolve_combat(game_state, message, int_verbose)
-                if int_verbose:
-                    create_log(f"MAIN_FLASK: RUN_ACTION: Combat result from resolve_combat: {event_result}")
             elif action_type == "puzzle" and game_state.get('active_puzzle'):
                 event_result = resolve_puzzle(game_state, message, int_verbose)
     
         if not skip_action:
-
+            
             if action_type == "dialogue":
                 npc = details.get('npc', 'Lyra')
                 prompt = f"Gere um diálogo com {npc}. Contexto: {story_context}\nEventos recentes: {event_result}"

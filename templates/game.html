@@ -50,6 +50,39 @@
     <div class="container mt-4">
         <div class="row justify-content-center">
             <div class="col-md-8">
+                <!-- Game State Panel -->
+                <div class="card bg-dark text-white mb-3">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0">Status do Jogo</h5>
+                        <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#statusCollapse">
+                            <i class="bi bi-chevron-down"></i>
+                        </button>
+                    </div>
+                    <div id="statusCollapse" class="collapse show">
+                        <div class="card-body">
+                            <ul class="list-group list-group-flush">
+                                <li class="list-group-item bg-dark text-white">Estado: {{ current_state }} / 5</li>
+                                <li class="list-group-item bg-dark text-white">Vida: {{ health }}</li>
+                                <li class="list-group-item bg-dark text-white">Recursos: 
+                                    {% if resources %}
+                                        Wands: {{ resources.get('wands', 0) }}, 
+                                        Potions: {{ resources.get('potions', 0) }}, 
+                                        Energy: {{ resources.get('energy', 0) }}
+                                    {% else %}
+                                        Wands: 0, Potions: 0, Energy: 0
+                                    {% endif %}
+                                </li>
+                                <li class="list-group-item bg-dark text-white">Pistas: {{ clues | length }} encontrada(s)</li>
+                                <li class="list-group-item bg-dark text-white">NPCs: 
+                                    {% for npc, status in npc_status.items() %}
+                                        {{ npc }}: {{ status }}{% if not loop.last %}, {% endif %}
+                                    {% endfor %}
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
                 {% with messages = get_flashed_messages(with_categories=true) %}
                     {% if messages %}
                         {% for category, message in messages %}
@@ -72,11 +105,13 @@
                                          class="img-fluid" />
                                 </div>
                                 <div class="col-12 mb-3">
-                                    {% if output %}
-                                        <div id="gameText" class="mb-3">
+                                    <div id="gameText" class="mb-3">
+                                        {% if output %}
                                             <p>{{ output }}</p>
-                                        </div>
-                                    {% endif %}
+                                        {% else %}
+                                            <p>Aguardando resposta...</p>
+                                        {% endif %}
+                                    </div>
                                     <div id="chatHistory" class="mb-3">
                                         <p style="white-space: pre-wrap;">{{ chat_history }}</p>
                                     </div>
@@ -185,11 +220,35 @@
                         if (response.output) {
                             $('#gameText').html('<p>' + response.output + '</p>');
                         } else {
-                            $('#gameText').empty();
+                            $('#gameText').html('<p>Aguardando resposta...</p>');
                         }
                         
                         // Update chat history
                         $('#chatHistory').html('<p style="white-space: pre-wrap;">' + response.chat_history + '</p>');
+                        
+                        // Update game state panel
+                        $('#statusCollapse .card-body').html(`
+                            <ul class="list-group list-group-flush">
+                                <li class="list-group-item bg-dark text-white">Estado: ${response.current_state} / 5</li>
+                                <li class="list-group-item bg-dark text-white">Vida: ${response.health}</li>
+                                <li class="list-group-item bg-dark text-white">Recursos: 
+                                    Wands: ${response.resources?.wands || 0}, 
+                                    Potions: ${response.resources?.potions || 0}, 
+                                    Energy: ${response.resources?.energy || 0}
+                                </li>
+                                <li class="list-group-item bg-dark text-white">Pistas: ${response.clues.length} encontrada(s)</li>
+                                <li class="list-group-item bg-dark text-white">NPCs: 
+                                    ${Object.entries(response.npc_status).map(([npc, status]) => `${npc}: ${status}`).join(', ')}
+                                </li>
+                            </ul>
+                        `);
+                        
+                        // Play sound effects based on response
+                        if (response.output.includes('Combat')) {
+                            window.audioManager.playSoundEffect('{{ url_for("static", filename="audio/combat.mp3") }}');
+                        } else if (response.output.includes('Puzzle')) {
+                            window.audioManager.playSoundEffect('{{ url_for("static", filename="audio/puzzle.mp3") }}');
+                        }
                         
                         // Update ambient sound
                         if (response.ambient_sound) {
