@@ -28,6 +28,7 @@ app = Flask(__name__)
 
 #TODO: for latter, not now: demora na geração de imagem, salvar imagem com prompt junto talvez via tupla? DETECT_INVENTORY_CHANGES: Invalid JSON response
 #TODO: for latter, not now: verify code robustness to handle multiple simultaneous users
+#TODO: for latter, not now: now only "Vida:" is rendered in drop down. erase that line, putting it in "recursos" and include the other paramenter "Habilidade"
 
 # Download database from GCS at startup
 os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)

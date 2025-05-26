@@ -113,23 +113,21 @@ def get_attack_prompt(combat_type, recent_history):
         {everyone_content_policy['policy']}
     """
 
-def get_combat_resolution_prompt(combat_content, action, clue, result, old_health, new_health, old_skill, new_skill, story_context, attempt_number, max_tries):
+def get_combat_resolution_prompt(combat_content, action, clue, result, story_context):
+
     return f"""
         Crie uma resposta narrativa imersiva para a resolução de um combate em Eldrida. 
         Combate: {combat_content}
         Ação do jogador: {action}
-        Dica fornecida: {clue}
         Resultado: {result}
-        Saúde mudou de {old_health:.1f} para {new_health:.1f}, habilidade mudou de {old_skill:.1f} para {new_skill:.1f}
         Contexto recente: {story_context}
-        Incorpore a ação do jogador, o resultado do combate, e os efeitos na saúde e habilidade de forma narrativa. 
+        Incorpore a ação do jogador e o resultado do combate de forma narrativa. 
         Reconecte à história, mencionando a exploração anterior.
-        Para combates em andamento, mencione explicitamente o número da tentativa (ex.: 'tentativa {attempt_number}/{max_tries}').
-        Somente indique que o jogador pode tentar novamente caso o combate esteja em andamento.
-        Para vitórias, confirme o sucesso do combate, não mencione tentativas adicionais.
-        Para derrotas, indique o fracasso e os custos, sem sugerir novas tentativas.
-        Evite termos mecânicos como 'custo' ou números brutos.
-        Retorne uma string com o diálogo (2-3 frases) em português, sem JSON. 
+        Para combates em andamento, indique que o jogador pode tentar novamente, sem mencionar tentativas específicas.
+        Para vitórias, confirme o sucesso do combate com tom triunfante.
+        Para derrotas, descreva o fracasso de forma clara, destacando a derrota e sem sugerir novas tentativas.
+        Evite mencionar tentativas específicas, saúde, habilidade ou a dica fornecida.
+        Retorne uma string com o diálogo (2-3 frases) in Portuguese, sem JSON. 
         Máximo 100 palavras.
         {everyone_content_policy['policy']}
     """
