@@ -73,11 +73,6 @@
                                     {% endif %}
                                 </li>
                                 <li class="list-group-item bg-dark text-white">Pistas: {{ clues | length }} encontrada(s)</li>
-                                <li class="list-group-item bg-dark text-white">NPCs: 
-                                    {% for npc, status in npc_status.items() %}
-                                        {{ npc }}: {{ status }}{% if not loop.last %}, {% endif %}
-                                    {% endfor %}
-                                </li>
                             </ul>
                         </div>
                     </div>
@@ -229,17 +224,14 @@
                         // Update game state panel
                         $('#statusCollapse .card-body').html(`
                             <ul class="list-group list-group-flush">
-                                <li class="list-group-item bg-dark text-white">Estado: ${response.current_state} / 5</li>
-                                <li class="list-group-item bg-dark text-white">Vida: ${response.health}</li>
+                                <li class="list-group-item bg-dark text-white">Nível: ${response.current_state} / 5</li>
+                                <li class="list-group-item bg-dark text-white">Saúde: ${response.health}</li>
                                 <li class="list-group-item bg-dark text-white">Recursos: 
                                     Wands: ${response.resources?.wands || 0}, 
                                     Potions: ${response.resources?.potions || 0}, 
                                     Energy: ${response.resources?.energy || 0}
                                 </li>
                                 <li class="list-group-item bg-dark text-white">Pistas: ${response.clues.length} encontrada(s)</li>
-                                <li class="list-group-item bg-dark text-white">NPCs: 
-                                    ${Object.entries(response.npc_status).map(([npc, status]) => `${npc}: ${status}`).join(', ')}
-                                </li>
                             </ul>
                         `);
                         

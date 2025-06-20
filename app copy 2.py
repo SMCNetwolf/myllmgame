@@ -239,7 +239,7 @@ def process_command():
                 game_state = get_initial_game_state(int_verbose=VERBOSE)
 
 
-
+    """
     #TODO: for latter: check if this is needed
     # Ensure resources is initialized
     if 'resources' not in game_state:
@@ -248,7 +248,7 @@ def process_command():
     
     # Clean history to remove duplicates
     clean_duplicate_history(game_state, int_verbose=VERBOSE)
-
+    """
     if VERBOSE:
         create_log(f"ROUTE /COMMAND: Game State:\n{game_state}")
 
@@ -280,30 +280,26 @@ def process_command():
 
     # Handle AJAX request
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        # Format chat history to include only the latest interaction
-        latest_interaction = [{'role': 'user', 'content': command}, {'role': 'assistant', 'content': output}]
-        chat_history = format_chat_history(latest_interaction, game_state)
-        
         response_data = {
-            'output': "",  # Not using run_action output
+            'output': '',
             'output_image': url_for('static', filename=image_filename),
             'ambient_sound': url_for('static', filename=ambient_sound),
-            'chat_history': chat_history,  # Latest interaction only
+            'chat_history': chat_history,
             'health': game_state.get('health', 10),
-            'resources': game_state.get('resources', {}),
+            'resources': game_state.get('resources', {'wands': 2, 'potions': 2, 'energy': 5}),
             'current_state': game_state.get('current_state', 1),
             'clues': game_state.get('clues', []),
             'npc_status': game_state.get('npc_status', {}),
             'sound_trigger': 'combat' if 'Combat' in output else 'puzzle' if 'Puzzle' in output else None
         }
-        create_log(f"ROUTE /COMMAND-AJAX: User {username}\n\nQuestion: {command}", force_log=True)
+        create_log(f"\nROUTE /COMMAND-AJAX: User {username}\n\nQuestion: {command}", force_log=True)
         create_log(f"ROUTE /COMMAND-AJAX: Generated image: {gcs_path}", force_log=True)
         create_log(f"ROUTE /COMMAND-AJAX: Completion: {chat_history}\n", force_log=True)
         return jsonify(response_data)
 
     # Fallback for non-AJAX
     response = make_response(render_template("game.html",
-                                            output=output,  # Use run_action output
+                                            output=output,
                                             output_image=image_filename,
                                             ambient_sound=ambient_sound,
                                             chat_history=chat_history,

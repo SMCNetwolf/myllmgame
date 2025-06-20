@@ -29,7 +29,7 @@ def get_is_safe_prompt(policy):
     Política: {policy}
     """
 
-#TODO: For later. System prompt is not being used now
+#TODO: System prompt (and all others) should be generalizable mainly command_interpreter_prompt
 system_prompt = """
     Você é o Mestre do Jogo em um RPG de fantasia em Arkonix. 
     O jogador busca um traidor em Eldrida. Forneça respostas 
@@ -49,59 +49,26 @@ system_inventory_prompt = """
 """
 
 command_interpreter_prompt = """
-    Interprete o comando do jogador no contexto de um RPG. Retorne SOMENTE um objeto JSON com:
-    - "action_type": ("dialogue", "exploration", "combat", "puzzle", "use_item", "investigate_npc", "generic")
+    Interprete o comando do jogador no contexto de um RPG em Eldrida. Retorne SOMENTE um objeto JSON com:
+    - "action_type": ("dialogue", "exploration", "combat", "puzzle", "use_item", "investigate", "generic")
     - "details": objeto com detalhes (ex.: {{"npc": "Lyra"}}, {{"location": "Taverna"}}, {{"item": "poção"}})
-    - "suggestion": string com uma sugestão de ação relevante (ex.: "Explore a cidade e converse com os habitantes") se "action_type" for "generic", caso contrário, deixe vazio ("")
-    Primeiro, verifique se o comando menciona um NPC (ex.: "falar com Eira"); se sim, use "dialogue" e inclua o NPC em "details".
-    Se o comando for vago ou genérico (ex.: "o que posso fazer", "onde posso ir", "o que há aqui", perguntas sem verbo claro ou sem destino específico), retorne "action_type" como "generic".
-    Para "exploration", o comando não pode ser uma pergunta e deve especificar um local (ex.: "ir ao mercado", "explorar Floresta") ou usar verbos assertivos com objeto claro (ex.: "examinar estátua", "procurar pistas").
-    Se o comando for ambíguo, default para "generic". Não assuma intenções baseadas apenas no contexto.
-    Sugestões para "generic" devem recomendar diálogo com um NPC relevante ao objetivo do jogo.
-    Baseie-se no contexto e histórico para sugerir ações relevantes aos objetivos do jogo.
-    Não inclua texto fora do JSON.  
-    Responda em português com no máximo 100 palavras.
+    - "suggestion": string com uma sugestão de ação relevante (ex.: "Explore a cidade e converse com os habitantes") se o comando for vago, caso contrário, deixe vazio ("")
+    Responda em português com no máximo 100 palavras. Não inclua texto fora do JSON.
 
     Contexto: {story_context}
     Eventos recentes: {event_info}
     Comando: {command}
 """
 
-def get_true_clue_prompt(objective, location, recent_history):
+def get_false_clue_prompt(location, recent_history):
     return f"""
-        Extraia do objetivo do jogo a seguir uma pista verdadeira para ajudar o jogador.
-        Incorpore o local ({location}) e o contexto recente diretamente nas pistas.
-        Exemplo: [{{"clue": "Laylus foi visto na taverna de {location}.", "id": "clue_001"}}]
-
-        Contexto recente:
-        {recent_history}
-        
-        Objetivo do jogo: 
-        {objective}
-
-        Retorne SOMENTE um objeto JSON: {{"clue": "pista", "id": "id unico"}}
-        IDs devem ser unicos e diferentes de qualquer ID no contexto recente.
-        Pista: max. 40 palavras, em português puro, sem caracteres especiais.
-        JSON completo e bem-formado, sem texto fora do JSON.
-        {everyone_content_policy['policy']}
-    """
-
-def get_false_clue_prompt(objective, location, recent_history):
-    return f"""
-        Crie uma pista falsa para um RPG de fantasia em {location}, baseada no contexto recente. 
-        Faça a pista parecer plausivel, mas contradiga o objetivo do jogo.
-        Exemplo: {{"clue": "Ouvi dizer que Lyrien esta escondido na floresta ao norte.", "id": "clue_001"}}
-
-        Contexto recente:
-        {recent_history}
-        
-        Objetivo do jogo: 
-        {objective}
-
-        Retorne SOMENTE um objeto JSON: {{"clue": "pista falsa", "id": "id unico"}}.
-        ID deve ser unico e diferente de qualquer ID no contexto recente.
-        Pista: max. 40 palavras, em português puro, sem caracteres especiais.
-        JSON completo e bem-formado, sem texto fora do JSON.
+        Crie uma pista falsa para um RPG de fantasia em {location}, Eldrida. 
+        Baseie-se no contexto recente: {recent_history}. 
+        Retorne SOMENTE um objeto JSON: {{"clue": "pista falsa", "id": "id único"}}. 
+        Não inclua texto fora do JSON. 
+        A pista deve ser em português puro, sem caracteres estrangeiros (ex.: Cyrillic, kanji) ou nomes próprios com caracteres especiais. 
+        Use palavras comuns e evite jargões. 
+        Máximo 50 palavras.
         {everyone_content_policy['policy']}
     """
 
@@ -166,31 +133,37 @@ def get_trick_prompt(recent_history):
         {everyone_content_policy['policy']}
     """
 
-def get_exploration_prompt(location, recent_history, clues, reward_type="none"):
+def get_exploration_options_prompt(exploration_result, recent_history):
     return f"""
-        Crie uma narrativa imersiva para uma ação de exploração em {location} em Eldrida, RPG de fantasia. 
-        Contexto: {recent_history}. 
-        Pistas: {clues}. 
-        Gere EXATAMENTE três opções de exploração específicas para {location}. 
-        EXATAMENTE uma opção deve ser bem-sucedida, com {f'uma pista verdadeira' if reward_type == 'true_clue' else f'uma pista falsa' if reward_type == 'false_clue' else f'um item (coin ou potion)' if reward_type == 'item' else 'nenhum resultado'}.
-        As outras duas opções devem ter resultado nulo (sem item ou pista). 
-        Retorne SOMENTE um objeto JSON:
-        - "description": narrativa (1-2 frases, máx. 50 palavras)
-        - "options": lista de 3 objetos, cada um com:
-          - "description": descrição da opção (1 frase, máx. 30 palavras)
-          - "action_type": "exploration"
-          - "outcome": "success" para a opção bem-sucedida, "none" para outras
-          - "reward": "" para todas as opções
-        Exemplo:
-        {{
-            "description": "Você explora {location}, sentindo uma aura misteriosa.",
-            "options": [
-                {{"description": "Examinar mesa da taverna.", "action_type": "exploration", "outcome": "success", "reward": ""}},
-                {{"description": "Olhar atrás do quadro.", "action_type": "exploration", "outcome": "none", "reward": ""}},
-                {{"description": "Procurar no baú.", "action_type": "exploration", "outcome": "none", "reward": ""}}
-            ]
-        }}
-        Não inclua texto fora do JSON. Máximo 100 palavras. 
+        Com base na exploração: '{exploration_result}' e contexto recente: '{recent_history}', 
+        gere opções de ações para o jogador em Eldrida. 
+        Inclua até 4 opções, com pelo menos uma de cada: diálogo (falar com NPC), exploração (visitar local), usar item, e investigar (marcar NPC como suspeito). 
+        Retorne SOMENTE um objeto JSON: {{"options": [{{"action": "tipo", "details": {{"npc": "nome" | "location": "lugar" | "item": "item" | "npc": "nome"}}}}, ...]}}. 
+        Não inclua texto fora do JSON.
+        {everyone_content_policy['policy']}
+    """
+
+def get_exploration_prompt(location, recent_history, clues):
+    return f"""
+        Crie uma narrativa imersiva para uma ação de exploração em {location} em Eldrida, no contexto de um RPG de fantasia. 
+        Baseie-se no contexto recente: {recent_history}. 
+        Pistas atuais: {clues}. 
+        Retorne SOMENTE um objeto JSON: {{"description": "narrativa (1-2 frases)", "item": "item encontrado (mysterious_note, coin, potion) ou vazio", "clue": "pista encontrada ou vazio"}}.
+        Não inclua texto fora do JSON. 
+        A narrativa deve ser temática e incluir pistas ou itens se relevante. 
+        Máximo 100 palavras. 
+        {everyone_content_policy['policy']}
+    """
+
+def old_get_game_objective_prompt():
+    return f"""
+        Crie um objetivo de jogo para um RPG de fantasia em Eldrida. 
+        O objetivo deve envolver um traidor (ex.: Lyrien Darkscale), uma relíquia secreta (ex.: EnterWealther), e um aliado confiável (ex.:Eira Shadowglow). 
+        Inclua pelo menos mais três NPCs com papel auxiliar na trama.
+        Estruture como uma narrativa épica (200-300 palavras) com um plano do traidor (ex.: usar a relíquia no solstício). 
+        Retorne SOMENTE um objeto JSON: {{"objective": "texto do objetivo"}}. 
+        Não inclua texto fora do JSON. 
+        Use português puro, sem caracteres especiais ou jargões.
         {everyone_content_policy['policy']}
     """
 
@@ -216,35 +189,39 @@ def get_game_objective_prompt():
         {everyone_content_policy['policy']}
     """
 
-def get_true_ally_confirmation_prompt(npc, location, story_context):
+def get_true_clue_prompt(objective, is_first=False):
+    instruction = "Extraia a primeira pista verdadeira do objetivo, indicando a existência da relíquia secreta (ex.: 'O traidor apossou-se de uma relíquia secreta')." if is_first else "Gere uma segunda pista verdadeira, revelando o plano do traidor (ex.: 'O traidor planeja usar a relíquia no solstício')."
     return f"""
-        Crie um diálogo em português com {npc} em {location} confirmando que é aliado confiável. 
+        {instruction}
+        Objetivo: {objective}
+        Retorne SOMENTE um objeto JSON: {{"clue": "pista verdadeira", "id": "id único"}}. 
+        Não inclua texto fora do JSON. 
+        A pista deve ter no máximo 50 palavras, em português puro, sem caracteres especiais.
+        Certifique-se de que o JSON seja completo e bem-formado.
+        {everyone_content_policy['policy']}
+    """
+
+def get_true_ally_confirmation_prompt(npc, story_context):
+    return f"""
+        Crie um diálogo em português confirmando {npc} como aliada confiável em Eldrida. 
         Contexto: {story_context}. 
-        Mostre {npc} revelando sua oposição ao vilão (ex.: 'Eu sei do plano do traidor e quero pará-lo'). 
+        Mostre Eira revelando sua oposição ao traidor (ex.: 'Eu sei do plano de Lyrien e quero pará-lo'). 
         Retorne apenas o diálogo (ex.: Eira: "Texto..." Você: "Texto..."), sem narrativa ou colchetes. 
         Máximo 3 trocas, 80 palavras. 
         {everyone_content_policy['policy']}
     """
 
-def get_npc_dialogue_prompt(npc, location, story_context, clue):
-    return f"""
-        Gere um diálogo com {npc} em {location}.
-        Contexto: {story_context}
-        {clue}
-        Retorne apenas o diálogo (ex.: {npc}: "Texto..." Você: "Texto..."), sem narrativa ou colchetes.
-        Máximo 3 trocas, 80 palavras.
-        {everyone_content_policy['policy']}
-    """        
 
-def get_general_action_prompt(objective, message, location, story_context, clue):
-    return f"""
-        Responda ao comando a seguir com uma narrativa imersiva em {location}.
-        Objetivo: {objective}
-        Tenha em mente o objetivo do jogo, mas não antecipe eventos nem dê dicas sobre o papel dos NPCs na trama.
-        Contexto: {story_context}
-        Comando: {message}
-        {clue}
-        Para comandos perguntando sobre destinos, (ex.: 'onde posso ir'), crie locais interessantes dentro da cidade (ex.: tavernas, becos, praças, mercado, templo) como o foco principal, mas liste também as saídas disponíveis de {location} (fornecidas no contexto).
-        Máximo 100 palavras.
-        {everyone_content_policy['policy']}
-    """
+
+
+
+
+
+
+
+
+
+
+
+
+

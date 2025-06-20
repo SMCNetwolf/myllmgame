@@ -77,11 +77,11 @@ IMAGE_MODEL = "black-forest-labs/FLUX.1-schnell-Free"
 MAX_SAVE = 5  # Maximum number of saved games per user    
 
 SOUND_MAP = {
-    "conversation": "static/audio/dialogue.mp3",
-    "tavern": "static/audio/exploration.mp3",
-    "city_streets": "static/audio/use_item.mp3",
+    "dialogue": "static/audio/dialogue.mp3",
+    "exploration": "static/audio/exploration.mp3",
+    "use_item": "static/audio/use_item.mp3",
     "combat": "static/audio/combat.mp3",
     "puzzle": "static/audio/puzzle.mp3",
-    "false_ally": "static/audio/false_ally",
+    "false_ally": "static/audio/false_ally.mp3",
     "generic": "static/audio/default_audio.mp3"
 }
