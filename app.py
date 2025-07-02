@@ -249,9 +249,6 @@ def process_command():
     # Clean history to remove duplicates
     clean_duplicate_history(game_state, int_verbose=VERBOSE)
 
-    if VERBOSE:
-        create_log(f"ROUTE /COMMAND: Game State:\n{game_state}")
-
     output = run_action(command, game_state, int_verbose=VERBOSE)
     timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
     gcs_path = f"{DEFAULT_IMAGE_FILE_PATH.split('.png')[0]}_{timestamp}.png"

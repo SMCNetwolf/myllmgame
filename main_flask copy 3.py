@@ -59,14 +59,9 @@ def generate_game_objective(int_verbose=False):
         response = client.chat.completions.create(
             model=MODEL,
             messages=[{"role": "user", "content": get_game_objective_prompt(world)}],
-            max_tokens=1000,
+            max_tokens=500,
             temperature=0.7
         ).choices[0].message.content
-        #create_log(f"\nMAIN_FLASK: GENERATE_GAME_OBJECTIVE: Raw API response:\n{response}", force_log=True)
-        response = response.replace("'", '"')
-        if not response.strip().startswith('{') or not response.strip().endswith('}'):
-            raise ValueError("Response is not a valid JSON object")
-        objective_data = json.loads(response)
         objective_data = json.loads(response)
         objective = objective_data['objective']
         true_clue = objective_data['true_clue']
@@ -74,7 +69,7 @@ def generate_game_objective(int_verbose=False):
         welcome_message = objective_data['welcome_message']
         initial_map = objective_data['initial_map']
     except Exception as e:
-        create_log(f"\nMAIN_FLASK: GENERATE_GAME_OBJECTIVE: Error generating objective: {str(e)}\nGenerating Default", force_log=True)
+        create_log(f"MAIN_FLASK: GENERATE_GAME_OBJECTIVE: Error generating objective: {str(e)}", force_log=True)
         objective_data = {
             'objective': 'Em Eldrida, o traidor Lyrien Darkscale busca roubar a relíquia secreta EnterWealther, uma fonte de poder ancestral. Ele planeja realizar um ritual no solstício de verão para invocar um poder maligno. Só Eira Shadowglow, uma habilidosa guerreira, pode ajudá-lo a parar. Encontre o sábio Thorne Silvermist, que pode fornecer informações valiosas sobre EnterWealther; o mercador Rylan Stonebrook, que pode fornecer suprimentos e armas; e a druida Elara Moonwhisper, que pode fornecer ajuda mágica.',
             'true_clue': {'content': 'Lyrien busca EnterWealther', 'id': 'clue1'},
@@ -98,22 +93,20 @@ def generate_game_objective(int_verbose=False):
         npcs = objective_data['npcs']
         welcome_message = objective_data['welcome_message']
         initial_map = objective_data['initial_map']
+        if int_verbose:
+            create_log(f"MAIN_FLASK: GENERATE_GAME_OBJECTIVE: Generated the Game Objective")
 
-    game_objective_dic = {
+    
+    return {
         'objective': objective,
         'true_clue': true_clue,
         'npcs': npcs,
         'welcome_message': welcome_message,
         'initial_map': initial_map
     }
-    if int_verbose:
-            create_log(f"MAIN_FLASK: GENERATE_GAME_OBJECTIVE: Generated the Game Objective:\n{game_objective_dic}")
-    return game_objective_dic
 
 def get_initial_game_state(int_verbose=False):
-    objective_data = generate_game_objective(int_verbose=True) # Temporarily forcing log of game objective
-    if int_verbose:
-        create_log(f"RUN_ACTION" )
+    objective_data = generate_game_objective(int_verbose=int_verbose)
     # Create a list with all NPCs and their status
     npc_status = {
         npc['name']: {
@@ -153,7 +146,7 @@ def validate_game_state(game_state):
     required_keys = [
         'history', 'output_image', 'ambient_sound', 'location', 'known_map', 'current_state', 'health', 'resources', 
         'awarded_clues', 'npc_status', 'combat_results', 'puzzle_results', 'character', 'active_puzzle', 
-        'active_combat', 'skill', 'waiting_for_option', 'game_objective', 'event_result'
+        'active_combat', 'skill', 'waiting_for_option', 'game_objective', 'true_clues', 'event_result'
     ]
     if not all(key in game_state for key in required_keys):
         create_log(f"\n\nMAIN_FLASK: VALIDATE_GAME_STATE: Missing required keys: {set(required_keys) - set(game_state.keys())}\n\n", force_log=True)
@@ -503,19 +496,19 @@ def update_inventory(game_state, item_updates, int_verbose=False):
             create_log(f'\n\nMAIN_FLASK: UPDATE_INVENTORY - Invalid update: {update}\n\n', force_log=True)
             continue
         item = update['item']
-        inv_change = update['change']
-        if not isinstance(inv_change, int):
+        change = update['change']
+        if not isinstance(change, int):
             if int_verbose:
-                create_log(f'\n\nMAIN_FLASK: UPDATE_INVENTORY - Invalid inv_change: {update}\n\n')
+                create_log(f'\n\nMAIN_FLASK: UPDATE_INVENTORY - Invalid change: {update}\n\n')
             continue
-        if inv_change == 0:
+        if change == 0:
             continue
-        elif inv_change > 0:
-            inventory[item] = inventory.get(item, 0) + inv_change
+        elif change > 0:
+            inventory[item] = inventory.get(item, 0) + change
             if int_verbose:
                 create_log(f'MAIN_FLASK: UPDATE_INVENTORY - Added {change} {item}')
-        elif inv_change < 0 and item in inventory:
-            inventory[item] = max(0, inventory.get(item, 0) + inv_change)
+        elif change < 0 and item in inventory:
+            inventory[item] = max(0, inventory.get(item, 0) + change)
             if int_verbose:
                 create_log(f'MAIN_FLASK: UPDATE_INVENTORY - Removed {abs(change)} {item}')
         if item in inventory and inventory[item] <= 0:
@@ -742,7 +735,7 @@ def resolve_puzzle(game_state, solution, int_verbose=False):
         create_log(f"MAIN_FLASK: RESOLVE_PUZZLE: Puzzle {'resolvido' if solved else 'ongoing' if puzzle['tries'] < MAX_TRIES else 'falhou'}, solution: {solution}")
     return result
 
-def run_action(message, game_state, int_verbose=False):
+def run_action(message, game_state, int_verbose=False): #TODO: for later - develop a method to avoid history getting too big in game_state. Maybe using summarize() if it gets X size.
     try:
         # checks if user message is safe
         if not is_safe(message, int_verbose):
@@ -764,22 +757,19 @@ def run_action(message, game_state, int_verbose=False):
         handle_option_selection = False
         if int_verbose:
             create_log(f"MAIN_FLASK: RUN_ACTION: Input: {message}, waiting_for_option: {game_state.get('waiting_for_option', 'MISSING')}, active_options: {game_state.get('active_options', 'NONE')}")
-        current_state = game_state.get('current_state', 2)  # Updated default to state 2 per TODO
+        #TODO: adjust states numbers. We eliminated state 1, but didn't move down the other states
+        current_state = game_state.get('current_state', 1)
         story_context = format_chat_history(game_state['history'], game_state)
         recent_history = format_chat_history(game_state['history'][-4:], game_state)
         result = ""
         false_npc = False
-        npc_list = ', '.join(game_state['npc_status'].keys()) # This is a list of NPCs with their name and status
-        npc_list_string = ", ".join(npc['name'] for npc in game_state['npc_status'].values()) # This is a string with the name of the NPCs
-        # Initialize awarded_clues, use false_clue, reinstate total_clue_count
+        # initiate clues
         if 'awarded_clues' not in game_state:
             game_state['awarded_clues'] = []
-            create_log("MAIN_FLASK: RUN_ACTION: Initialized awarded_clues to [] (for true and false clues)", force_log=True)
-        false_clue_count = len([c for c in game_state['awarded_clues'] if c.get('false_clue', False)])
-        true_clue_count = len([c for c in game_state['awarded_clues'] if not c.get('false_clue', False) and c.get('awarded', True)])
+            create_log("MAIN_FLASK: RUN_ACTION: Awarded_clues not found. Initialized awarded_clues to []", force_log=True)
+        false_clue_count = len([c for c in game_state['awarded_clues'] if c.get('false', False)])
+        true_clue_count = len([c for c in game_state['awarded_clues'] if not c.get('false', False)])
         total_clue_count = false_clue_count + true_clue_count
-        if int_verbose:
-            create_log(f"MAIN_FLASK: RUN_ACTION: Clue counts: false_clue_count={false_clue_count}, true_clue_count={true_clue_count}, total_clue_count={total_clue_count}")
         combat_count = len(game_state['combat_results'])
         puzzle_count = len(game_state['puzzle_results'])
         ally_count = sum(1 for npc in game_state['npc_status'] if game_state['npc_status'][npc]['supposed_status'] == 'Suspeito')
@@ -795,9 +785,9 @@ def run_action(message, game_state, int_verbose=False):
         skip_action = False
         generate_image = None
         
-        # Sets allowed events in each state
+        # Sets allowed events in each state  #TODO: This logic is flawed - in state 2, we need to be sure all clues, false and true are given
         if current_state == 2:
-            allowed_events = ["false_clue", "trick", "attack"] if total_clue_count < (MAX_FALSE_CLUE + MAX_TRUE_CLUE) or puzzle_count < MAX_TRICK or combat_count < MAX_ATTACKS else []
+            allowed_events = ["false_clue", "trick", "attack"] if false_clue_count < MAX_FALSE_CLUE or puzzle_count < MAX_TRICK or combat_count < MAX_ATTACKS else []
         elif current_state == 3:
             allowed_events = ["trick", "attack"] if puzzle_count < MAX_TRICK or combat_count < MAX_ATTACKS else []
         elif current_state == 4:
@@ -805,6 +795,7 @@ def run_action(message, game_state, int_verbose=False):
         
         # Option selection first block - Gets the selected option if waiting for option
         if game_state['waiting_for_option'] and game_state['active_options']:
+            # sanitize empty option selection
             options_prompt = (
                 f"Por favor, escolha uma opção válida ({', '.join(str(i + 1) for i in range(len(game_state['active_options'])))}).\n"
                 f"Escolha uma opção: - Digite apenas o número -\n"
@@ -813,6 +804,7 @@ def run_action(message, game_state, int_verbose=False):
             if not message.strip():
                 create_log("MAIN_FLASK: RUN_ACTION: Empty input while waiting_for_option", force_log=True)
                 return options_prompt
+            # prepares to handle selected option
             if message.strip().isdigit():
                 option_index = int(message) - 1
                 if 0 <= option_index < len(game_state['active_options']):
@@ -821,17 +813,20 @@ def run_action(message, game_state, int_verbose=False):
                     game_state['waiting_for_option'] = False
                     handle_option_selection = True
                     create_log(f"MAIN_FLASK: RUN_ACTION: Selected option {message}: {action_type}, {details}", force_log=True)
+                # if selected number is out, force user to choose a valid option
                 else:
                     create_log(f"MAIN_FLASK: RUN_ACTION: Invalid option: {', '.join(str(i + 1) for i in range(len(game_state['active_options'])))}", force_log=True)
                     return f"Opção inválida. {options_prompt}"
+            # if user input is not a number
             else:
                 create_log(f"MAIN_FLASK: RUN_ACTION: Non-numeric input while waiting_for_option: {message}", force_log=True)
                 return options_prompt
 
-        # Interprets the user input if action type is generic or there's no action already running
+        # Interprets the user input if action type is generic or there's no action already running - Sets action_type, details, suggestion
         if action_type == "generic" and not handle_option_selection:
             if int_verbose:
                 create_log(f"MAIN_FLASK: RUN_ACTION: entering interpret command because there's no action running")
+            npc_list = ', '.join(game_state['npc_status'].keys())
             prompt = command_interpreter_prompt.format(
                 story_context=story_context,
                 command=message,
@@ -839,7 +834,7 @@ def run_action(message, game_state, int_verbose=False):
                 npc_list=npc_list
             )
             if int_verbose:
-                create_log(f"MAIN_FLASK: RUN_ACTION: Before command interpreter: Action: {action_type}, Details: {details}, Suggestion: {suggestion}")
+                create_log(f"MAIN_FLASK: RUN_ACTION: Before command interprer: Action: {action_type}, Details: {details}, Suggestion: {suggestion}")
             response = client.chat.completions.create(
                 model=MODEL,
                 messages=[{"role": "user", "content": prompt}],
@@ -848,6 +843,7 @@ def run_action(message, game_state, int_verbose=False):
             ).choices[0].message.content
             if int_verbose:
                 create_log(f"MAIN_FLASK: RUN_ACTION: Command interpreter response: {response}")
+            # sanitize response
             try:
                 command_data = json.loads(response)
                 command_data.setdefault("action_type", "generic")
@@ -867,13 +863,15 @@ def run_action(message, game_state, int_verbose=False):
                 else:
                     command_data = {"action_type": "generic", "details": {}, "suggestion": ""}
                     return "Comando não reconhecido, tente algo como 'falar com um NPC' ou 'explorar'."
+            # load the variables
             action_type = command_data.get('action_type', 'generic')
             details = command_data.get('details', {})
             suggestion = command_data.get('suggestion', "")
         if int_verbose:
             create_log(f"MAIN_FLASK: RUN_ACTION: Interpreted User command: {action_type}, Details: {details}, Suggestion: {suggestion}")
 
-        # Event handling block
+        # Event handling block - It is here because events interrupt normal flow
+        # roll the dice to choose an event (or nothing) to generate 
         if action_type == "exploration" and not game_state.get('waiting_for_option') and not handle_option_selection:
             dice = random.random()
             trigger_event = dice < EVENT_CHANCE
@@ -881,8 +879,10 @@ def run_action(message, game_state, int_verbose=False):
                 event_type = random.choice(allowed_events) 
                 if int_verbose:
                     create_log(f"\n\nMAIN_FLASK RUN ACTION: Dices thrown. \nDice result: {dice}. EVENT_CHANCE = {EVENT_CHANCE} .\nSelected Event type is {event_type}. Was it triggerred? {trigger_event}. \n\n")        
+        # Generate an event if triggered
         if trigger_event:
             event = generate_random_events(game_state, event_type, recent_history, int_verbose)
+            # sanitize event
             if event is None or not isinstance(event, dict) or 'type' not in event or event['type'] not in event_handlers:
                 create_log(f"MAIN_FLASK: RUN_ACTION: Invalid event: {event}", force_log=True)
                 event_result = "Nenhum evento ocorre no momento."
@@ -890,10 +890,12 @@ def run_action(message, game_state, int_verbose=False):
                 if 'event_info' in event:
                     create_log(f"MAIN_FLASK: RUN_ACTION: Unexpected key 'event_info' in event: {event}", force_log=True)
                     event.pop('event_info', None)
+            # Flags in game state that multiple interactions event has started
             if event['type'] == "attack":
                 game_state['active_combat'] = event
             elif event['type'] == "trick":
                 game_state['active_puzzle'] = event
+            # runs the correct event using event_handlers mapping dict
             handler_result = event_handlers[event['type']](game_state, event, int_verbose)  
             if isinstance(handler_result, tuple):
                 game_state['event_result'], sound_trigger = handler_result
@@ -904,7 +906,7 @@ def run_action(message, game_state, int_verbose=False):
             if int_verbose:
                 create_log(f"MAIN_FLASK: RUN_ACTION: Event {event['type']} triggered: {event_result}")
 
-        # handle multiple interactions in combats or puzzles
+        # handle multiple interactions in combats or puzzles if they are already initiated
         if game_state.get('active_puzzle') or game_state.get('active_combat'):
             skip_action = True
             if action_type == "combat" and game_state.get('active_combat'):
@@ -917,16 +919,23 @@ def run_action(message, game_state, int_verbose=False):
             if action_type == "dialogue":
                 if int_verbose:
                     create_log(f"MAIN_FLASK: RUN_ACTION: Dialogue start")
+                # flag to do not add suggestion to the response
                 suggestion = None
                 sound_trigger = "dialogue"
+                # Get the NPC from user command and location from game state
                 npc = details.get('npc', random.choice(list(game_state['npc_status'].keys())))
+                # Update location reference to use 'name'
                 location = game_state['location']['name']
+                # handle invalid NPC redirecting user to choose a valid one
                 if npc not in game_state['npc_status']:
+                    npc_list_string = ", ".join(npc['name'] for npc in game_state['npc_status'].values())
                     result = f"Você pode falar com: {npc_list_string}."
                     create_log(f"MAIN_FLASK: RUN_ACTION: Invalid NPC -{npc}- selected. Redirected user to {npc_list_string}", force_log=True)
                     false_npc = True
                     sound_trigger = "generic"
+                #handle valid NPC dialogues
                 else:
+                    # If NPC is true ally and not perceived as one, create a dialogue confirming the NPC as ally
                     if game_state['npc_status'][npc]['status'] == 'Allied' and game_state['npc_status'][npc]['supposed_status'] != "Allied":
                         recent_history = format_chat_history(game_state['history'][-2:], game_state)
                         prompt = get_true_ally_confirmation_prompt(npc, location, recent_history)
@@ -945,13 +954,14 @@ def run_action(message, game_state, int_verbose=False):
                             result = f"{response}"
                             if int_verbose:
                                 create_log(f"MAIN_FLASK: RUN_ACTION: Confirmed {npc} as Allied")
+                    # If NPC is not a true ally, just create a dialogue incorporating recent clue, if there is one
                     else:
                         incorporate_clue = f"Incorpore a pista: {game_state['recent_clue']['content']}." if game_state.get('recent_clue') else ""
-                        prompt = get_npc_dialogue_prompt(game_state['game_objective'], npc, location, story_context, incorporate_clue)
+                        prompt = get_npc_dialogue_prompt(npc, location, story_context, incorporate_clue)
                         response = client.chat.completions.create(
                             model=MODEL,
                             messages=[{"role": "user", "content": prompt}],
-                            max_tokens=200,
+                            max_tokens=150,
                             temperature=0.0
                         ).choices[0].message.content
                         is_safe_result, violations = is_safe(response, int_verbose)
@@ -961,11 +971,13 @@ def run_action(message, game_state, int_verbose=False):
                             result = f"{response}"
                             if int_verbose:
                                 create_log(f"MAIN_FLASK: RUN_ACTION - Generated dialogue with non true ally NPC" )
+                # Updates NPC status in game state
                 if not false_npc:
                     if game_state['npc_status'][npc]['supposed_status'] not in ['Allied', 'Suspeito']:
                         game_state['npc_status'][npc]['supposed_status'] = 'Contactado'
 
             elif action_type == "exploration":
+                # Update exploration to use 'exploring_location' and Skip location update when handling option selection
                 if not handle_option_selection:
                     location = details.get('location', game_state['location']['name'])
                     game_state['location']['exploring_location'] = location
@@ -973,8 +985,10 @@ def run_action(message, game_state, int_verbose=False):
                         create_log(f"MAIN_FLASK: RUN_ACTION: Set exploring_location to {location}")
                 clues = json.dumps(game_state['awarded_clues'])
                 if int_verbose:
-                    create_log(f"MAIN_FLASK: RUN_ACTION: Exploration block start, false_clue_count={false_clue_count}, true_clue_count={true_clue_count}, total_clue_count={total_clue_count}")
+                    create_log(f"MAIN_FLASK: RUN_ACTION: Exploration block start, false_clue_count: {false_clue_count}, true_clue_count: {true_clue_count}, total_clue_count: {total_clue_count}")  
+                # Option selection second block - handles the selection obtained above 
                 if handle_option_selection:
+                    # sanitize option selection
                     if not message.strip().isdigit() or not (1 <= int(message) <= 3):
                         result = f"Por favor, escolha uma opção válida (1, 2, 3)."
                         game_state['history'].append({'role': 'assistant', 'content': result})
@@ -993,15 +1007,17 @@ def run_action(message, game_state, int_verbose=False):
                     reward_type = game_state['exploration_success'].get('reward_type', 'none')
                     if int_verbose:
                         create_log(f"MAIN_FLASK: RUN_ACTION: Selected option index: {option_index}, reward_type: {reward_type}")
+                    # Handles success choice related to clues 
+                    # Update exploration_success to use 'exploring_location'
                     if option_index == game_state['exploration_success']['index'] and game_state['location']['exploring_location'] == game_state['exploration_success']['exploring_location']:
-                        false_clue_count = len([c for c in game_state['awarded_clues'] if c.get('false_clue', False)])
-                        true_clue_count = len([c for c in game_state['awarded_clues'] if not c.get('false_clue', False) and c.get('awarded', True)])
+                        false_clue_count = len([c for c in game_state['awarded_clues'] if c.get('false', False)])
+                        true_clue_count = len([c for c in game_state['awarded_clues'] if not c.get('false', False)])
                         total_clue_count = false_clue_count + true_clue_count
                         if current_state in [2, 4] and total_clue_count < (MAX_FALSE_CLUE + MAX_TRUE_CLUE):
                             if false_clue_count >= MAX_FALSE_CLUE:
                                 reward_type = "true_clue"
                                 if int_verbose:
-                                    create_log(f"MAIN_FLASK: RUN_ACTION: Forcing true_clue: false_clue_count={false_clue_count} >= MAX_FALSE_CLUE={MAX_FALSE_CLUE}")
+                                    create_log(f"MAIN_FLASK: RUN_ACTION: Forcing true_clue: false_clue_count={false_clue_count} >= MAX_FALSE_CLUE={MAX_FALSE_CLUE}, total_clue_count={total_clue_count}")
                             elif true_clue_count >= MAX_TRUE_CLUE:
                                 reward_type = "false_clue"
                                 if int_verbose:
@@ -1013,15 +1029,16 @@ def run_action(message, game_state, int_verbose=False):
                         else:
                             reward_type = "none"
                             if int_verbose:
-                                create_log(f"MAIN_FLASK: RUN_ACTION: Set reward_type to none: total_clue_count={total_clue_count}")
+                                create_log(f"MAIN_FLASK: RUN_ACTION: Set reward_type to none: total_clue_count={total_clue_count}, MAX_FALSE_CLUE+MAX_TRUE_CLUE={MAX_FALSE_CLUE + MAX_TRUE_CLUE}, current_state={current_state}")
                         if int_verbose:
                             create_log(
                                 f"MAIN_FLASK: RUN_ACTION: Success option selected: index={option_index}, "
                                 f"details={game_state['active_options'][option_index]}, "
                                 f"exploration_success={game_state['exploration_success']}, "
                                 f"current_exploring_location={game_state['location']['exploring_location']}, "
-                                f"reward_type={reward_type}"
+                                f"reward_type={reward_type}",
                             )
+                        # Handle clues
                         if reward_type in ["true_clue", "false_clue"]:
                             event_type = reward_type
                             option_description = game_state['active_options'][option_index][1]['description']
@@ -1033,23 +1050,27 @@ def run_action(message, game_state, int_verbose=False):
                                     f"event_type={event_type}, clues_before={game_state['awarded_clues']}"
                                 )
                             if event and 'content' in event and 'id' in event:
-                                clue = {'content': event['content'], 'id': event['id'], 'false_clue': reward_type == "false_clue", 'awarded': True}
+                                clue = { 'content': event['content'], 'id': event['id'], 'false': reward_type == "false_clue"}
                                 game_state['awarded_clues'].append(clue)
+                                if reward_type == "true_clue":
+                                    true_clue = {'content': event['content'], 'id': event['id'], 'false': False}
+                                    game_state['true_clues'].append(true_clue)
                                 game_state['recent_clue'] = {"id": clue['id'], "content": clue['content']}
                                 result = f"Você encontrou uma pista: {clue['content']}."
                                 if int_verbose:
-                                    create_log(f"MAIN_FLASK: RUN_ACTION: Awarded {reward_type}: {clue['content']}, id: {clue['id']} to awarded_clues")
+                                    create_log(f"MAIN_FLASK: RUN_ACTION: Awarded {reward_type}: {clue['content']}, id Agatha Christieid: {clue['id']}")
                             else:
                                 create_log(f"MAIN_FLASK: RUN_ACTION: Failed to generate {reward_type}: {event}", force_log=True)
                                 result = f"Você explorou, mas não encontrou nada relevante."
                         else:
                             result = f"Você explorou, mas não encontrou nada relevante."
-                        false_clue_count = len([c for c in game_state['awarded_clues'] if c.get('false_clue', False)])
-                        true_clue_count = len([c for c in game_state['awarded_clues'] if not c.get('false_clue', False) and c.get('awarded', True)])
+                        false_clue_count = len([c for c in game_state['awarded_clues'] if c.get('false', False)])
+                        true_clue_count = len([c for c in game_state['awarded_clues'] if not c.get('false', False)])
                         total_clue_count = false_clue_count + true_clue_count
                         if int_verbose:
                             create_log(f"MAIN_FLASK: RUN_ACTION: Post-award clue counts: false_clue_count={false_clue_count}, true_clue_count={true_clue_count}, total_clue_count={total_clue_count}")
                     else:
+                        # Handle non-success options
                         option_description = game_state['active_options'][option_index][1]['description']
                         if reward_type == "none":
                             result = f"Você descobriu algo interessante, mas não encontrou pistas concretas. Quem sabe na próxima."
@@ -1057,7 +1078,8 @@ def run_action(message, game_state, int_verbose=False):
                                 create_log(f"MAIN_FLASK: RUN_ACTION: Awarded narrative reward for {option_description}")
                         else:
                             result = f"Você explorou, mas não encontrou nada relevante."
-                    game_state['history'].append({'role': 'assistant', 'content': result})
+                    # Appending to history and ensuring persistence
+                    game_state['history'].append({'role': 'assistant','content': result})
                     game_state['waiting_for_option'] = False
                     game_state['active_options'] = []
                     game_state.pop('exploration_success', None)
@@ -1065,13 +1087,15 @@ def run_action(message, game_state, int_verbose=False):
                     sound_trigger = "exploration"
                     result += "\n\nO que você deseja fazer agora?"
                     return result      
+                # create clue             
                 if not game_state.get('waiting_for_option'):
+                    # Determine clue type via dice roll
                     clue_probs = []                   
                     if current_state in [2, 4] and total_clue_count < (MAX_FALSE_CLUE + MAX_TRUE_CLUE):
                         if false_clue_count >= MAX_FALSE_CLUE:
                             reward_type = "true_clue"
                             if int_verbose:
-                                create_log(f"MAIN_FLASK: RUN_ACTION: Forcing true_clue: false_clue_count={false_clue_count} >= MAX_FALSE_CLUE={MAX_FALSE_CLUE}")
+                                create_log(f"MAIN_FLASK: RUN_ACTION: Forcing true_clue: false_clue_count={false_clue_count} >= MAX_FALSE_CLUE={MAX_FALSE_CLUE}, total_clue_count={total_clue_count}")
                         elif true_clue_count >= MAX_TRUE_CLUE:
                             reward_type = "false_clue"
                             if int_verbose:
@@ -1087,7 +1111,8 @@ def run_action(message, game_state, int_verbose=False):
                         clue_probs = [("none", 1.0)]
                         reward_type = "none"
                         if int_verbose:
-                            create_log(f"MAIN_FLASK: RUN_ACTION: Set reward_type to none: total_clue_count={total_clue_count}")
+                            create_log(f"MAIN_FLASK: RUN_ACTION: Set reward_type to none: total_clue_count={total_clue_count}, MAX_FALSE_CLUE+MAX_TRUE_CLUE={MAX_FALSE_CLUE + MAX_TRUE_CLUE}, current_state={current_state}")
+                        # Redirect to generic action when all clues are awarded in state 2 and transition to state 3
                         if current_state == 2 and total_clue_count >= (MAX_FALSE_CLUE + MAX_TRUE_CLUE):
                             game_state['current_state'] = 3
                             action_type = "generic"
@@ -1095,7 +1120,8 @@ def run_action(message, game_state, int_verbose=False):
                             suggestion = "Converse com NPCs ou investigue suspeitos para progredir."
                             result = f"Você coletou todas as pistas disponíveis em {game_state['location']['exploring_location']}. Não há mais pistas a encontrar.\nVocê evoluiu para o nível 3!"
                             if int_verbose:
-                                create_log(f"MAIN_FLASK: RUN_ACTION: Transitioned to state 3: total_clue_count={total_clue_count}")
+                                create_log(f"MAIN_FLASK: RUN_ACTION: Redirected to generic action: total_clue_count={total_clue_count}. Transitioned to next state: current_state={game_state['current_state']}")
+                            # Update game state and history
                             game_state['history'].append({'role': 'assistant', 'content': result})
                             save_temp_game_state(game_state, int_verbose)
                             sound_trigger = "generic"
@@ -1103,6 +1129,7 @@ def run_action(message, game_state, int_verbose=False):
                             return final_result
                     if int_verbose:
                         create_log(f"MAIN_FLASK: RUN_ACTION: Exploration reward type: {reward_type}")
+                    # Generate exploration options
                     prompt = get_exploration_prompt(location, recent_history, clues, reward_type)
                     try:
                         response = client.chat.completions.create(
@@ -1117,6 +1144,7 @@ def run_action(message, game_state, int_verbose=False):
                         if not is_safe_result:
                             create_log(f"MAIN_FLASK: RUN_ACTION: Unsafe exploration response: {response}", force_log=True)
                             return "Resposta de exploração não permitida."
+                        
                         try:
                             exploration_data = json.loads(response)
                             if not isinstance(exploration_data, dict) or 'description' not in exploration_data or 'options' not in exploration_data:
@@ -1125,12 +1153,15 @@ def run_action(message, game_state, int_verbose=False):
                             options = exploration_data['options']
                             if not isinstance(options, list) or len(options) != 3:
                                 raise ValueError(f"Expected 3 options, got {len(options) if isinstance(options, list) else 'non-list'}")
+                            # Validate option structure
                             for opt in options:
                                 if not all(key in opt for key in ['description', 'action_type', 'outcome', 'reward']):
                                     raise ValueError(f"Invalid option structure: {opt}")
+                            # Find success index
                             success_index = next((i for i, opt in enumerate(options) if opt['outcome'] == "success"), None)
                             if success_index is None:
                                 raise ValueError("No success option found")
+                            # shuffle options
                             shuffled_options = options.copy()
                             random.shuffle(shuffled_options)
                             new_success_index = next((i for i, opt in enumerate(shuffled_options) if opt['outcome'] == "success"), None)
@@ -1140,7 +1171,9 @@ def run_action(message, game_state, int_verbose=False):
                             success_index = new_success_index
                             if int_verbose:
                                 create_log(f"MAIN_FLASK: RUN_ACTION: Shuffled options, new success_index: {success_index}")
+                            # Store clue type in exploration_success for later processing
                             game_state['active_options'] = [(opt['action_type'], opt) for opt in options]
+                            # Update exploration_success to use 'exploring_location'
                             game_state['exploration_success'] = {
                                 'index': success_index,
                                 'reward_type': reward_type,
@@ -1149,15 +1182,17 @@ def run_action(message, game_state, int_verbose=False):
                             }
                             game_state['waiting_for_option'] = True
                             result += "\nEscolha uma opção: - Digite apenas o número -\n" + "\n".join(f"{i+1}. {opt['description']}" for i, opt in enumerate(options))
+                            # Append options to history for display
                             game_state['history'].append({
                                 'role': 'assistant',
                                 'content': result
                             })
-                            save_temp_game_state(game_state, int_verbose)
+                            save_temp_game_state(game_state, int_verbose)  # Ensure state is saved
                             if int_verbose:
                                 create_log(f"MAIN_FLASK: RUN_ACTION: Exploration block Stored options: \n{options} \nsuccess_index: {success_index}, history appended")
                         except (json.JSONDecodeError, ValueError) as e:
                             create_log(f"MAIN_FLASK: RUN_ACTION: Failed to parse or validate exploration response: {response}, Error: {str(e)}", force_log=True)
+                            # Fallback options
                             options = [
                                 {"description": f"Examinar um baú em {location}.", "action_type": "exploration", "outcome": "success" if reward_type != "none" else "none", "reward": "potion" if reward_type == "item" else ""},
                                 {"description": f"Procurar nas sombras de {location}.", "action_type": "exploration", "outcome": "none", "reward": ""},
@@ -1165,6 +1200,7 @@ def run_action(message, game_state, int_verbose=False):
                             ]
                             success_index = 0 if reward_type != "none" else None
                             game_state['active_options'] = [(opt['action_type'], opt) for opt in options]
+                            # Update fallback exploration_success to use 'exploring_location'
                             game_state['exploration_success'] = {
                                 'index': success_index,
                                 'reward_type': reward_type,
@@ -1173,11 +1209,12 @@ def run_action(message, game_state, int_verbose=False):
                             }
                             game_state['waiting_for_option'] = True
                             result = f"Você explora {location}, observando detalhes ao seu redor.\nEscolha uma opção: - Digite apenas o número - \n" + "\n".join(f"{i+1}. {opt['description']}" for i, opt in enumerate(options))
+                            # Append fallback options to history
                             game_state['history'].append({
                                 'role': 'assistant',
                                 'content': result
                             })
-                            save_temp_game_state(game_state, int_verbose)
+                            save_temp_game_state(game_state, int_verbose)  # Ensure state is saved
                             if int_verbose:
                                 create_log(f"MAIN_FLASK: RUN_ACTION: Using fallback options: {options}, history appended")
                     except Exception as e:
@@ -1201,6 +1238,7 @@ def run_action(message, game_state, int_verbose=False):
                 if int_verbose:
                     create_log(f"MAIN_FLASK: RUN_ACTION: Investigate block start")
                 npc = details.get('npc', random.choice(list(game_state['npc_status'].keys())))
+                # Update location reference to use 'name'
                 location = game_state['location']['name']
                 if npc not in game_state['npc_status']:
                     result = f"Você descobriu que {npc} não está presente em {location} ou não é importante."
@@ -1252,6 +1290,7 @@ def run_action(message, game_state, int_verbose=False):
             else:  # generic action
                 if int_verbose:
                     create_log(f"MAIN_FLASK: RUN_ACTION: Generic action block start")
+                # Update location reference to use 'name'
                 location = game_state['location']['name']
                 if int_verbose:
                     create_log(f"MAIN_FLASK: RUN_ACTION: Current location: {location}, known_map keys: {list(game_state['known_map'].keys())}")
@@ -1260,7 +1299,7 @@ def run_action(message, game_state, int_verbose=False):
                 if exits:
                     story_context_with_exits += f"\nSaídas disponíveis para sair de {location}: {', '.join(exits)}."
                 incorporate_clue = f"Incorpore a pista: {game_state['recent_clue']['content']}." if game_state.get('recent_clue') else ""
-                prompt = get_general_action_prompt(game_state['game_objective'], details, location, story_context_with_exits, incorporate_clue, npc_list)
+                prompt = get_general_action_prompt(game_state['game_objective'], details, location, story_context_with_exits, incorporate_clue)
                 response = client.chat.completions.create(
                     model=MODEL,
                     messages=[{"role": "user", "content": prompt}],
@@ -1279,22 +1318,25 @@ def run_action(message, game_state, int_verbose=False):
         # Final result assembly block
         final_result = event_result if event_result else result.strip()
         if not final_result:
+            # Update default message to use 'name'
             final_result = f"Sua ação em {game_state['location']['name']} não revela novas pistas."
+        # incorporate suggestion in response
         if suggestion and not skip_action and not game_state['waiting_for_option'] and (event_type is None or event_type != "attack"):
             final_result += f"\n\nSugestão: {suggestion}"
         
         # State transition control block
         if not game_state.get('waiting_for_option'):
-            false_clue_count = len([c for c in game_state['awarded_clues'] if c.get('false_clue', False)])
-            true_clue_count = len([c for c in game_state['awarded_clues'] if not c.get('false_clue', False) and c.get('awarded', True)])
+            false_clue_count = len([c for c in game_state['awarded_clues'] if c.get('false', False)])
+            true_clue_count = len([c for c in game_state['awarded_clues'] if not c.get('false', False)])
             total_clue_count = false_clue_count + true_clue_count
+            # Transition from state 2 to 3 is handled in exploration block
             if current_state == 3 and any(
                 game_state['npc_status'][npc]['supposed_status'] == 'Allied' and \
                 game_state['npc_status'][npc]['status'] == 'Allied' for npc in game_state['npc_status']
             ) and ally_count >= MAX_FALSE_ALLY:
                 game_state['current_state'] = 4
                 if int_verbose:
-                    create_log(f"MAIN_FLASK: RUN_ACTION: State 3 to 4: Allied found, {ally_count} allies")
+                    create_log(f"MAIN_FLASK: RUN_ACTION: State 3 to {4}: Allied found, {ally_count} allies")
                 final_result += "\nCom um aliado confiável e suspeitos identificados, você evoluiu para o nível 4!"
             elif current_state == 4 and any(
                 game_state['npc_status'][npc]['supposed_status'] == 'Hostile' for npc in game_state['npc_status']
@@ -1330,4 +1372,6 @@ def run_action(message, game_state, int_verbose=False):
 
 
 
-#print(generate_game_objective())
+
+
+

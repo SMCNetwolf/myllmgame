@@ -51,27 +51,34 @@ system_inventory_prompt = """
 command_interpreter_prompt = """
     Interprete o comando do jogador no contexto de um RPG. Retorne SOMENTE um objeto JSON com:
     - "action_type": ("dialogue", "exploration", "combat", "puzzle", "use_item", "investigate_npc", "generic")
-    - "details": objeto com detalhes (ex.: {{"npc": "Lyra"}}, {{"location": "Taverna"}}, {{"item": "poção"}})
+    - "details": objeto com detalhes (ex.: {{"npc": "Lyra Westminster"}}, {{"location": "Taverna"}}, {{"item": "poção"}})
     - "suggestion": string com uma sugestão de ação relevante (ex.: "Explore a cidade e converse com os habitantes") se "action_type" for "generic", caso contrário, deixe vazio ("")
-    Primeiro, verifique se o comando menciona um NPC (ex.: "falar com Eira"); se sim, use "dialogue" e inclua o NPC em "details".
-    Se o comando for vago ou genérico (ex.: "o que posso fazer", "onde posso ir", "o que há aqui", perguntas sem verbo claro ou sem destino específico), retorne "action_type" como "generic".
-    Para "exploration", o comando não pode ser uma pergunta e deve especificar um local (ex.: "ir ao mercado", "explorar Floresta") ou usar verbos assertivos com objeto claro (ex.: "examinar estátua", "procurar pistas").
+    Primeiro, verifique se o comando é um número (1, 2, 3) e se o contexto recente contém opções numeradas (ex.: "1. Abordar Thorold..."). 
+    Se for um número, selecione a opção correspondente do contexto mais recente:
+    - Se a opção contém "falar", "perguntar", "abordar", ou "conversar", use "dialogue" e inclua "npc" em "details" (use o NPC mencionado ou o mais recente no contexto, ex.: "Thorold").
+    - Se a opção contém "procurar", "investigar", "examinar", "observar", use "exploration" e inclua "location" em "details" (use a localização atual ou mencionada no contexto).
+    - Caso contrário, use "generic" com uma sugestão relevante.
+    NPCs válidos: {npc_list}
+    Se o comando menciona um NPC (ex.: "falar com Eira") ou continua um diálogo (ex.: perguntas ou respostas sem NPC explícito), use "dialogue" e inclua o NPC em "details" usando o nome completo correspondente (ex.: "Eira" -> "Eira Shadowglow"). 
+    Se o comando não mencionar um NPC, mas seguir um diálogo recente, use o NPC mais recente do contexto.
+    Se o comando contém "procurar", "investigar", "examinar", "observar", , "ir para", use "exploration" e inclua "location" em "details" (use a localização atual ou mencionada no contexto).
+    Se o comando for uma pergunta vaga sobre possíveis ações ou interlocutores (ex.: "o que posso fazer", "onde posso ir", "com quem posso falar"), retorne "action_type" como "generic" com "details" vazio e uma "suggestion" listando NPCs ou locais relevantes (ex.: "Converse com Eira Shadowglow ou visite o Templo da Estrela")    
     Se o comando for ambíguo, default para "generic". Não assuma intenções baseadas apenas no contexto.
     Sugestões para "generic" devem recomendar diálogo com um NPC relevante ao objetivo do jogo.
     Baseie-se no contexto e histórico para sugerir ações relevantes aos objetivos do jogo.
     Não inclua texto fora do JSON.  
     Responda em português com no máximo 100 palavras.
-
     Contexto: {story_context}
     Eventos recentes: {event_info}
-    Comando: {command}
+    Comando do jogador: {command}
 """
 
 def get_true_clue_prompt(objective, location, recent_history):
+    location_str = f"{location['exploring_location']} em {location['name']}" if location.get('exploring_location') else location['name']
     return f"""
         Extraia do objetivo do jogo a seguir uma pista verdadeira para ajudar o jogador.
         Incorpore o local ({location}) e o contexto recente diretamente nas pistas.
-        Exemplo: [{{"clue": "Laylus foi visto na taverna de {location}.", "id": "clue_001"}}]
+        Exemplo: [{{"clue": "Laylus foi visto na taverna de {location_str}.", "id": "clue_001"}}]
 
         Contexto recente:
         {recent_history}
@@ -194,15 +201,21 @@ def get_exploration_prompt(location, recent_history, clues, reward_type="none"):
         {everyone_content_policy['policy']}
     """
 
-def get_game_objective_prompt():
+def get_game_objective_prompt(world):
     return f"""
-        Crie um objetivo de jogo para um RPG de fantasia em Eldrida. Estruture a resposta SOMENTE como um objeto JSON com os campos abaixo. Use português puro, sem caracteres especiais ou jargões.
-        Retorne SOMENTE um objeto JSON. Não inclua texto fora do JSON.
-        - "objective": Narrativa épica (150-200 palavras) sobre um traidor (ex.: Lyrien Darkscale), uma relíquia secreta (ex.: EnterWealther), e um aliado confiável (ex.: Eira Shadowglow). Inclua um plano do traidor (ex.: ritual no solstício) e mencione três NPCs auxiliares com papéis na trama (ex.: sábio, mercador, druida).
-        - "true_clue": Objeto com "content" (uma pista sobre o traidor, ex.: "Lyrien busca EnterWealther") e "id" (string única, ex.: "clue1").
-        - "npcs": Lista de objetos, cada um com "name" (ex.: Lyrien Darkscale), "status" (Hostile, Allied, Neutral), e "description" (10-15 palavras descrevendo o NPC sem spoilers, ex.: "Lyrien: Mago sombrio com olhos penetrantes."). Inclua o traidor, o aliado, e os três NPCs auxiliares.
-        - "welcome_message": Mensagem inicial (20-30 palavras) introduzindo Eldrida e um rumor vago de traição, sem spoilers (ex.: "Você chega em Eldrida e ouve rumores de traição...").
-        - "initial_map": Objeto com uma localização inicial "Eldrida" contendo "description" (ex.: "Uma cidade vibrante") e "exits" (lista de 3-4 saídas, ex.: ["Floresta", "Castelo"]).
+        Crie um objetivo de jogo para um RPG de fantasia no mundo descrito. 
+        Use português puro, sem caracteres especiais ou jargões.
+        Estruture a resposta SOMENTE como um objeto JSON com os campos abaixo. 
+        Retorne SOMENTE um objeto JSON. Não inclua texto fora do JSON. Certifique-se de que o JSON seja completo e bem-formado.
+        - "objective": Narrativa épica (150-200 palavras) sobre um traidor que pretende tomar o poder, usando uma relíquia secreta que aumenta sua capacidade.
+        A narrativa deve conter o traidor, um plano malígno (ex.: usar a relíquia durante o ritual do solstício), um aliado confiável do jogador, que o ajudará a vencer e 
+        três NPCs auxiliares com papéis na trama (ex.: sábio, mercador, druida). Inclua também a trama e os recursos que o jogador precisará adquirir para poder vencer a batalha final.
+        - "true_clue": Objeto com "content" (uma pista sobre o traidor, ex.: "Lyrien busca Cetro EnterWealther") e "id" (string única, ex.: "clue1").
+        - "npcs": Lista de objetos, cada um com "name" (ex.: Lyrien Darkscale), "status" (Hostile, Allied, Neutral), e "description" (10-15 palavras descrevendo o NPC sem spoilers, 
+        ex.: "Mago sombrio com olhos penetrantes."). Certifique-se de incluir o traidor, o aliado, e os três NPCs auxiliares. 
+        Se NPCs forem fornecidos no Mundo, escolha os que usará a partir dali. Caso contrário, crie-os. 
+        - "welcome_message": Mensagem inicial (20-30 palavras) introduzindo a cidade e o reino atuais e um rumor vago de traição, sem spoilers (ex.: "Você chega na cidade de Luminaria, no reino de Eldrida e ouve rumores de traição...").
+        - "initial_map": Objeto com a localização inicial obtida do Mundo a seguir, ex."Luminaria" contendo "description" (ex.: "Uma cidade vibrante") e "exits" (lista de 3-4 saídas, ex.: ["Ventaria", "Kragnir", "Tharros"]).
 
         Exemplo de formato:
         {{
@@ -210,8 +223,10 @@ def get_game_objective_prompt():
             "true_clue": {{"content": "pista", "id": "clue1"}},
             "npcs": [{{"name": "Nome", "status": "Neutral", "description": "texto"}}],
             "welcome_message": "texto",
-            "initial_map": {{"Eldrida": {{"description": "texto", "exits": ["lugar1", "lugar2"]}}}}
+            "initial_map": {{"Luminaria": {{"description": "texto", "exits": ["Ventaria", "Kragnir", "Tharros"]}}}}
         }}
+        
+        Mundo:{world}
 
         {everyone_content_policy['policy']}
     """
@@ -226,25 +241,35 @@ def get_true_ally_confirmation_prompt(npc, location, story_context):
         {everyone_content_policy['policy']}
     """
 
-def get_npc_dialogue_prompt(npc, location, story_context, clue):
+def get_npc_dialogue_prompt(objective, npc, location, story_context, clue):
     return f"""
         Gere um diálogo com {npc} em {location}.
         Contexto: {story_context}
+        Objetivo: {objective}
         {clue}
-        Retorne apenas o diálogo (ex.: {npc}: "Texto..." Você: "Texto..."), sem narrativa ou colchetes.
-        Máximo 3 trocas, 80 palavras.
+        Instruções:
+        - Evite repetir falas anteriores do diálogo, especialmente do histórico recente.
+        - Construa respostas que avancem a narrativa e se conectem ao contexto.
+        - Leve em consideração o objetivo do jogo, sem dar muitas dicas ou antecipar eventos a partir dele. Apenas o suficiente para manter o interesse do jogador e avançar a narrativa.
+        - Retorne apenas o diálogo (ex.: {npc}: "Texto..." Você: "Texto..."), sem narrativa ou colchetes.
+        - Máximo 3 trocas, 80 palavras.
         {everyone_content_policy['policy']}
     """        
 
-def get_general_action_prompt(objective, message, location, story_context, clue):
+def get_general_action_prompt(objective, message, location, story_context, clue, npc_list):
     return f"""
-        Responda ao comando a seguir com uma narrativa imersiva em {location}.
+        Responda ao comando a seguir com uma narrativa imersiva em {location}. Não inclua uma lista de opções.
         Objetivo: {objective}
-        Tenha em mente o objetivo do jogo, mas não antecipe eventos nem dê dicas sobre o papel dos NPCs na trama.
+        Tenha em mente o objetivo do jogo, mas não dê dicas sobre o papel dos NPCs na trama. O jogador deve ir descobrindo o que fazer, com leve direcionamento, para manter seu interesse.
         Contexto: {story_context}
+        NPCs válidos: {npc_list}
         Comando: {message}
         {clue}
         Para comandos perguntando sobre destinos, (ex.: 'onde posso ir'), crie locais interessantes dentro da cidade (ex.: tavernas, becos, praças, mercado, templo) como o foco principal, mas liste também as saídas disponíveis de {location} (fornecidas no contexto).
+        Para comandos pedindo auxílo genérico para interação com NPCs (ex.:"com quem posso falar", "quem posso encontrar"), sugira dialogar com NPCs válidos (ex.: "Converse com os Eira Shadowglow ou com a Rainha Lyra sobre o plano do traidor").
+
         Máximo 100 palavras.
         {everyone_content_policy['policy']}
     """
+
+
